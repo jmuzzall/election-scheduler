@@ -1,0 +1,106 @@
+<% const title = 'Dashboard' %>
+<%- include('../partials/header') %>
+<%- include('../partials/admin-nav') %>
+
+<div class="container mt-4">
+  <h2 class="mb-4"><i class="bi bi-speedometer2"></i> Dashboard</h2>
+
+  <!-- Stats Cards -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-3 col-6">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body text-center">
+          <i class="bi bi-people display-6 text-primary"></i>
+          <h3 class="mt-2 mb-0"><%= stats.candidateCount %></h3>
+          <p class="text-muted mb-0">Candidates</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3 col-6">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body text-center">
+          <i class="bi bi-check-circle display-6 text-success"></i>
+          <h3 class="mt-2 mb-0"><%= stats.submittedCount %></h3>
+          <p class="text-muted mb-0">Submitted</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3 col-6">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body text-center">
+          <i class="bi bi-geo-alt display-6 text-warning"></i>
+          <h3 class="mt-2 mb-0"><%= stats.locationCount %></h3>
+          <p class="text-muted mb-0">Locations</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3 col-6">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body text-center">
+          <i class="bi bi-calendar-event display-6 text-info"></i>
+          <h3 class="mt-2 mb-0"><%= stats.assignmentCount %></h3>
+          <p class="text-muted mb-0">Assignments</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Summary -->
+  <div class="row g-3">
+    <div class="col-md-6">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white fw-bold">
+          <i class="bi bi-gear"></i> Current Settings
+        </div>
+        <div class="card-body">
+          <table class="table table-sm mb-0">
+            <tr>
+              <td class="text-muted">Schedule Start</td>
+              <td class="fw-bold"><%= settings.schedule_start_date || 'Not set' %></td>
+            </tr>
+            <tr>
+              <td class="text-muted">Schedule End</td>
+              <td class="fw-bold"><%= settings.schedule_end_date || 'Not set' %></td>
+            </tr>
+            <tr>
+              <td class="text-muted">Input Deadline</td>
+              <td class="fw-bold">
+                <% if (settings.input_deadline) { %>
+                  <%= new Date(settings.input_deadline).toLocaleString() %>
+                <% } else { %>
+                  Not set
+                <% } %>
+              </td>
+            </tr>
+          </table>
+          <a href="/admin/settings" class="btn btn-sm btn-outline-primary mt-2">
+            <i class="bi bi-pencil"></i> Edit Settings
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-6">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white fw-bold">
+          <i class="bi bi-lightning"></i> Quick Actions
+        </div>
+        <div class="card-body">
+          <div class="d-grid gap-2">
+            <a href="/admin/candidates" class="btn btn-outline-primary">
+              <i class="bi bi-people"></i> Manage Candidates
+            </a>
+            <a href="/admin/locations" class="btn btn-outline-primary">
+              <i class="bi bi-geo-alt"></i> Manage Locations
+            </a>
+            <a href="/admin/schedule" class="btn btn-outline-success">
+              <i class="bi bi-calendar-check"></i> View / Generate Schedule
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<%- include('../partials/footer') %>

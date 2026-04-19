@@ -1,0 +1,97 @@
+<% const title = 'Candidate Login' %>
+<%- include('../partials/header') %>
+
+<div class="d-flex align-items-center justify-content-center min-vh-100 bg-light">
+  <div class="card shadow-sm border-0" style="width: 100%; max-width: 420px;">
+    <div class="card-body p-4">
+      <div class="text-center mb-4">
+        <i class="bi bi-person-circle display-4 text-success"></i>
+        <h3 class="mt-2">Candidate Login</h3>
+        <% if (step === 'email') { %>
+          <p class="text-muted">Enter your email to sign in</p>
+        <% } else if (step === 'create-password') { %>
+          <p class="text-muted">Welcome! Create a password for your account.</p>
+        <% } else if (step === 'password') { %>
+          <p class="text-muted">Welcome back! Enter your password.</p>
+        <% } %>
+      </div>
+
+      <% if (message) { %>
+        <div class="alert alert-success"><i class="bi bi-check-circle"></i> <%= message %></div>
+      <% } %>
+      <% if (error) { %>
+        <div class="alert alert-danger"><i class="bi bi-exclamation-triangle"></i> <%= error %></div>
+      <% } %>
+
+      <% if (step === 'email') { %>
+        <!-- Step 1: Enter email -->
+        <form method="POST" action="/candidate/login">
+          <input type="hidden" name="step" value="email">
+          <div class="mb-3">
+            <label for="email" class="form-label">Your Email</label>
+            <input type="email" class="form-control" id="email" name="email"
+              placeholder="Enter your email address" value="<%= email %>" required autofocus>
+          </div>
+          <button type="submit" class="btn btn-success w-100">
+            <i class="bi bi-arrow-right"></i> Continue
+          </button>
+        </form>
+
+      <% } else if (step === 'create-password') { %>
+        <!-- Step 2a: First login — create password -->
+        <div class="alert alert-info py-2">
+          <i class="bi bi-info-circle"></i> Logging in as <strong><%= email %></strong>
+        </div>
+        <form method="POST" action="/candidate/login">
+          <input type="hidden" name="step" value="create-password">
+          <input type="hidden" name="email" value="<%= email %>">
+          <div class="mb-3">
+            <label for="new_password" class="form-label">Create Password</label>
+            <input type="password" class="form-control" id="new_password" name="new_password"
+              placeholder="At least 6 characters" minlength="6" required autofocus>
+          </div>
+          <div class="mb-3">
+            <label for="confirm_password" class="form-label">Confirm Password</label>
+            <input type="password" class="form-control" id="confirm_password" name="confirm_password"
+              placeholder="Re-enter your password" minlength="6" required>
+          </div>
+          <button type="submit" class="btn btn-success w-100">
+            <i class="bi bi-check-lg"></i> Create Password & Sign In
+          </button>
+        </form>
+
+      <% } else if (step === 'password') { %>
+        <!-- Step 2b: Returning user — enter password -->
+        <div class="alert alert-info py-2">
+          <i class="bi bi-info-circle"></i> Logging in as <strong><%= email %></strong>
+        </div>
+        <form method="POST" action="/candidate/login">
+          <input type="hidden" name="step" value="password">
+          <input type="hidden" name="email" value="<%= email %>">
+          <div class="mb-3">
+            <label for="password" class="form-label">Password</label>
+            <input type="password" class="form-control" id="password" name="password"
+              placeholder="Enter your password" required autofocus>
+          </div>
+          <button type="submit" class="btn btn-success w-100">
+            <i class="bi bi-box-arrow-in-right"></i> Sign In
+          </button>
+        </form>
+      <% } %>
+
+      <% if (step !== 'email') { %>
+        <div class="text-center mt-3">
+          <a href="/candidate/login" class="text-muted small">
+            <i class="bi bi-arrow-left"></i> Use a different email
+          </a>
+        </div>
+      <% } %>
+
+      <div class="text-center mt-3">
+        <a href="/" class="text-muted small"><i class="bi bi-house"></i> Back to Home</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<%- include('../partials/footer') %>

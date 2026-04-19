@@ -1,0 +1,84 @@
+<% const title = 'Settings' %>
+<%- include('../partials/header') %>
+<%- include('../partials/admin-nav') %>
+
+<div class="container mt-4">
+  <h2 class="mb-4"><i class="bi bi-gear"></i> Settings</h2>
+
+  <% if (success) { %>
+    <div class="alert alert-success alert-dismissible fade show">
+      <i class="bi bi-check-circle"></i> <%= success %>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  <% } %>
+  <% if (error) { %>
+    <div class="alert alert-danger alert-dismissible fade show">
+      <i class="bi bi-exclamation-triangle"></i> <%= error %>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  <% } %>
+
+  <div class="row g-4">
+    <!-- Schedule Date Range -->
+    <div class="col-md-8">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white fw-bold">
+          <i class="bi bi-calendar-range"></i> Schedule Configuration
+        </div>
+        <div class="card-body">
+          <form method="POST" action="/admin/settings">
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label for="schedule_start_date" class="form-label">Schedule Start Date</label>
+                <input type="date" class="form-control" id="schedule_start_date" name="schedule_start_date"
+                  value="<%= settings.schedule_start_date || '' %>">
+                <div class="form-text">First date of the scheduling period</div>
+              </div>
+              <div class="col-md-6">
+                <label for="schedule_end_date" class="form-label">Schedule End Date</label>
+                <input type="date" class="form-control" id="schedule_end_date" name="schedule_end_date"
+                  value="<%= settings.schedule_end_date || '' %>">
+                <div class="form-text">Last date of the scheduling period</div>
+              </div>
+              <div class="col-md-6">
+                <label for="input_deadline" class="form-label">Input Deadline</label>
+                <input type="datetime-local" class="form-control" id="input_deadline" name="input_deadline"
+                  value="<%= settings.input_deadline ? settings.input_deadline.replace(' ', 'T').substring(0, 16) : '' %>">
+                <div class="form-text">Candidates must submit availability before this date/time</div>
+              </div>
+            </div>
+            <button type="submit" class="btn btn-primary mt-3">
+              <i class="bi bi-check-lg"></i> Save Settings
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Change Password -->
+    <div class="col-md-4">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white fw-bold">
+          <i class="bi bi-key"></i> Change Password
+        </div>
+        <div class="card-body">
+          <form method="POST" action="/admin/change-password">
+            <div class="mb-3">
+              <label for="current_password" class="form-label">Current Password</label>
+              <input type="password" class="form-control" id="current_password" name="current_password" required>
+            </div>
+            <div class="mb-3">
+              <label for="new_password" class="form-label">New Password</label>
+              <input type="password" class="form-control" id="new_password" name="new_password" required minlength="6">
+            </div>
+            <button type="submit" class="btn btn-warning w-100">
+              <i class="bi bi-key"></i> Change Password
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<%- include('../partials/footer') %>

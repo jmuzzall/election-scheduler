@@ -1,0 +1,139 @@
+<% const title = 'My Availability' %>
+<%- include('../partials/header') %>
+
+<!-- Candidate Nav -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-success">
+  <div class="container">
+    <a class="navbar-brand" href="/candidate/portal">
+      <i class="bi bi-calendar-check"></i> Sunday Duty Scheduler
+    </a>
+    <div class="navbar-nav ms-auto">
+      <span class="nav-link text-white"><i class="bi bi-person"></i> <%= candidate.name %></span>
+      <a class="nav-link" href="/candidate/logout"><i class="bi bi-box-arrow-right"></i> Logout</a>
+    </div>
+  </div>
+</nav>
+
+<div class="container mt-4">
+  <!-- Countdown / Status Banner -->
+  <% if (isLocked) { %>
+    <div class="alert alert-warning border-0 shadow-sm">
+      <h5 class="alert-heading"><i class="bi bi-lock"></i> Deadline Passed</h5>
+      <p class="mb-0">The deadline to submit availability has passed. You have been marked as available for all Sundays. Please contact the Admin if you need an emergency change.</p>
+    </div>
+  <% } else if (settings.input_deadline) { %>
+    <div class="alert alert-info border-0 shadow-sm">
+      <h5 class="alert-heading"><i class="bi bi-clock"></i> Submission Deadline</h5>
+      <p class="mb-0">
+        You have <strong><span id="countdown"></span></strong> left to submit your availability.
+        <br><small class="text-muted">Deadline: <%= new Date(settings.input_deadline).toLocaleString() %></small>
+      </p>
+    </div>
+  <% } else { %>
+    <div class="alert alert-info border-0 shadow-sm">
+      <h5 class="alert-heading"><i class="bi bi-info-circle"></i> No Deadline Set</h5>
+      <p class="mb-0">The administrator has not set a submission deadline yet. You can submit your availability at any time.</p>
+    </div>
+  <% } %>
+
+  <% if (!settings.schedule_start_date || !settings.schedule_end_date) { %>
+    <div class="alert alert-secondary">
+      <i class="bi bi-exclamation-circle"></i> The schedule date range has not been configured yet. Please check back later.
+    </div>
+  <% } else { %>
+    <div class="row g-4">
+      <!-- Left column: instructions + actions -->
+      <div class="col-lg-5">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white fw-bold">
+            <i class="bi bi-info-circle"></i> Instructions
+          </div>
+          <div class="card-body">
+            <ol class="mb-0">
+              <li class="mb-2">Click <strong>"Open Calendar"</strong> below to open the date picker.</li>
+              <li class="mb-2">The calendar only shows dates from <strong><%= settings.schedule_start_date %></strong> to <strong><%= settings.schedule_end_date %></strong>.</li>
+              <li class="mb-2">Tap on <strong>Sundays</strong> you are <strong>NOT available</strong> to work. Tap again to deselect.</li>
+              <li class="mb-2">Selected (red) Sundays = <span class="text-danger fw-bold">Unavailable</span>.</li>
+              <li class="mb-2">Click <strong>"Done"</strong> when finished selecting dates.</li>
+              <li>Click <strong>"Save Availability"</strong> to submit your selections.</li>
+            </ol>
+          </div>
+        </div>
+
+        <% if (candidate.has_submitted_input) { %>
+          <div class="alert alert-success mt-3">
+            <i class="bi bi-check-circle"></i> You have already submitted your availability.
+            <% if (!isLocked) { %>You can still update it before the deadline.<% } %>
+          </div>
+        <% } %>
+
+        <% if (!isLocked) { %>
+          <div class="d-grid gap-2 mt-3">
+            <button class="btn btn-lg btn-outline-primary" id="btnOpenCalendar" type="button">
+              <i class="bi bi-calendar-event"></i> Open Calendar
+            </button>
+            <button class="btn btn-lg btn-primary" id="btnSave" onclick="saveBlackouts()">
+              <i class="bi bi-check-lg"></i> Save Availability
+            </button>
+          </div>
+        <% } %>
+        <div id="saveResult" class="mt-2"></div>
+      </div>
+
+      <!-- Right column: selected dates summary -->
+      <div class="col-lg-7">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white fw-bold">
+            <i class="bi bi-calendar-x"></i> Your Unavailable Sundays
+          </div>
+          <div class="card-body">
+            <div id="selectedSummary">
+              <p class="text-muted mb-0">No dates selected yet.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Calendar Popup Modal -->
+    <div class="modal fade" id="calendarModal" tabindex="-1" aria-labelledby="calendarModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="calendarModalLabel">
+              <i class="bi bi-calendar-event"></i> Select Unavailable Sundays
+            </h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <p class="text-muted small mb-3">
+              Tap on <strong>Sundays</strong> you <strong>cannot</strong> work. Only Sundays within the schedule range are selectable. Tap again to deselect.
+            </p>
+            <div id="calendar-container"></div>
+          </div>
+          <div class="modal-footer">
+            <span class="me-auto text-muted small" id="popupSelectionCount">0 Sundays marked unavailable</span>
+            <button type="button" class="btn btn-primary" data-bs-dismiss="modal">
+              <i class="bi bi-check-lg"></i> Done
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  <% } %>
+</div>
+
+<%- include('../partials/footer') %>
+
+<script src="/js/candidate-portal.js"></script>
+<script>
+<% if (settings.schedule_start_date && settings.schedule_end_date) { %>
+  initCandidatePortal({
+    startDate: '<%= settings.schedule_start_date %>',
+    endDate: '<%= settings.schedule_end_date %>',
+    deadline: '<%= settings.input_deadline || '' %>',
+    blackoutDates: <%- JSON.stringify(blackoutDates) %>,
+    isLocked: <%= isLocked ? 'true' : 'false' %>
+  });
+<% } %>
+</script>

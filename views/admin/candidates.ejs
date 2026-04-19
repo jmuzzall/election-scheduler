@@ -1,0 +1,227 @@
+<% const title = 'Candidates' %>
+<%- include('../partials/header') %>
+<%- include('../partials/admin-nav') %>
+
+<div class="container mt-4">
+  <h2 class="mb-4"><i class="bi bi-people"></i> Candidates</h2>
+
+  <% if (success) { %>
+    <div class="alert alert-success alert-dismissible fade show">
+      <i class="bi bi-check-circle"></i> <%= success %>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  <% } %>
+  <% if (error) { %>
+    <div class="alert alert-danger alert-dismissible fade show">
+      <i class="bi bi-exclamation-triangle"></i> <%= error %>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  <% } %>
+
+  <div class="row g-4">
+    <!-- Add / Import -->
+    <div class="col-lg-4">
+      <!-- Add Single Candidate -->
+      <div class="card border-0 shadow-sm mb-3">
+        <div class="card-header bg-white fw-bold">
+          <i class="bi bi-person-plus"></i> Add Candidate
+        </div>
+        <div class="card-body">
+          <form method="POST" action="/admin/candidates/add">
+            <div class="mb-2">
+              <input type="text" class="form-control" name="name" placeholder="Full Name" required>
+            </div>
+            <div class="mb-2">
+              <input type="email" class="form-control" name="email" placeholder="Email" required>
+            </div>
+            <div class="mb-2">
+              <input type="number" class="form-control" name="max_shifts" placeholder="Max Shifts" value="4" min="1">
+            </div>
+            <button type="submit" class="btn btn-primary w-100">
+              <i class="bi bi-plus-lg"></i> Add
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <!-- CSV Upload -->
+      <div class="card border-0 shadow-sm mb-3">
+        <div class="card-header bg-white fw-bold">
+          <i class="bi bi-upload"></i> Import CSV
+        </div>
+        <div class="card-body">
+          <form method="POST" action="/admin/candidates/upload" enctype="multipart/form-data">
+            <div class="mb-2">
+              <input type="file" class="form-control" name="csv" accept=".csv" required>
+            </div>
+            <button type="submit" class="btn btn-outline-primary w-100">
+              <i class="bi bi-upload"></i> Upload CSV
+            </button>
+          </form>
+          <p class="text-muted small mt-2 mb-0">
+            CSV format: <code>Name, Email, Max Shifts</code>
+          </p>
+        </div>
+      </div>
+
+      <!-- Bulk Actions -->
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white fw-bold">
+          <i class="bi bi-envelope"></i> Magic Links
+        </div>
+        <div class="card-body">
+          <button class="btn btn-success w-100" id="btnSendAllLinks" onclick="sendAllMagicLinks()">
+            <i class="bi bi-send"></i> Send Links to All Candidates
+          </button>
+          <div id="sendAllResult" class="mt-2"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Candidate List -->
+    <div class="col-lg-8">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white fw-bold d-flex justify-content-between align-items-center">
+          <span><i class="bi bi-list"></i> All Candidates (<%= candidates.length %>)</span>
+        </div>
+        <div class="card-body p-0">
+          <% if (candidates.length === 0) { %>
+            <div class="text-center py-5 text-muted">
+              <i class="bi bi-people display-4"></i>
+              <p class="mt-2">No candidates yet. Add one above or upload a CSV.</p>
+            </div>
+          <% } else { %>
+            <div class="table-responsive">
+              <table class="table table-hover mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th class="text-center">Max Shifts</th>
+                    <th class="text-center">Submitted</th>
+                    <th class="text-end">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% for (const c of candidates) { %>
+                    <tr>
+                      <td>
+                        <!-- Display name; click to edit -->
+                        <span class="candidate-name" data-id="<%= c.id %>"><%= c.name %></span>
+                      </td>
+                      <td class="text-muted small"><%= c.email %></td>
+                      <td class="text-center"><%= c.max_shifts %></td>
+                      <td class="text-center">
+                        <% if (c.has_submitted_input) { %>
+                          <span class="badge bg-success"><i class="bi bi-check"></i> Yes</span>
+                        <% } else { %>
+                          <span class="badge bg-secondary"><i class="bi bi-x"></i> No</span>
+                        <% } %>
+                      </td>
+                      <td class="text-end">
+                        <button class="btn btn-sm btn-outline-primary" title="Send Magic Link"
+                          onclick="sendMagicLink(<%= c.id %>, '<%= c.email %>')">
+                          <i class="bi bi-envelope"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary" title="Edit"
+                          data-bs-toggle="modal" data-bs-target="#editModal"
+                          onclick="openEditModal(<%= c.id %>, '<%= c.name.replace(/'/g, "\\'") %>', '<%= c.email %>', <%= c.max_shifts %>)">
+                          <i class="bi bi-pencil"></i>
+                        </button>
+                        <form method="POST" action="/admin/candidates/<%= c.id %>/delete" class="d-inline"
+                          onsubmit="return confirm('Delete <%= c.name.replace(/'/g, "\\'") %>?')">
+                          <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete">
+                            <i class="bi bi-trash"></i>
+                          </button>
+                        </form>
+                      </td>
+                    </tr>
+                  <% } %>
+                </tbody>
+              </table>
+            </div>
+          <% } %>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal fade" id="editModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="editForm" method="POST">
+        <div class="modal-header">
+          <h5 class="modal-title">Edit Candidate</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Name</label>
+            <input type="text" class="form-control" name="name" id="editName" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Email</label>
+            <input type="email" class="form-control" name="email" id="editEmail" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Max Shifts</label>
+            <input type="number" class="form-control" name="max_shifts" id="editMaxShifts" min="1" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+function openEditModal(id, name, email, maxShifts) {
+  document.getElementById('editForm').action = '/admin/candidates/' + id + '/edit';
+  document.getElementById('editName').value = name;
+  document.getElementById('editEmail').value = email;
+  document.getElementById('editMaxShifts').value = maxShifts;
+}
+
+async function sendMagicLink(id, email) {
+  if (!confirm('Send magic link to ' + email + '?')) return;
+  try {
+    const resp = await fetch('/api/send-magic-link/' + id, { method: 'POST' });
+    const data = await resp.json();
+    if (data.success) {
+      alert('Magic link sent to ' + email + (data.link ? '\n\nDev link: ' + data.link : ''));
+    } else {
+      alert('Error: ' + data.error);
+    }
+  } catch (err) {
+    alert('Failed to send magic link.');
+  }
+}
+
+async function sendAllMagicLinks() {
+  if (!confirm('Send magic links to ALL candidates?')) return;
+  const btn = document.getElementById('btnSendAllLinks');
+  const result = document.getElementById('sendAllResult');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Sending...';
+  try {
+    const resp = await fetch('/api/send-all-magic-links', { method: 'POST' });
+    const data = await resp.json();
+    if (data.success) {
+      result.innerHTML = '<div class="alert alert-success py-1 small">Sent: ' + data.sent + ', Failed: ' + data.failed + '</div>';
+    } else {
+      result.innerHTML = '<div class="alert alert-danger py-1 small">' + (data.error || 'Error') + '</div>';
+    }
+  } catch (err) {
+    result.innerHTML = '<div class="alert alert-danger py-1 small">Failed to send.</div>';
+  }
+  btn.disabled = false;
+  btn.innerHTML = '<i class="bi bi-send"></i> Send Links to All Candidates';
+}
+</script>
+
+<%- include('../partials/footer') %>

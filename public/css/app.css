@@ -1,0 +1,161 @@
+/* ─── Landing Page ─────────────────────────────── */
+.landing-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+  padding: 40px 0;
+}
+
+/* ─── Cards ───────────────────────────────────── */
+.card {
+  border-radius: 12px;
+  transition: transform 0.2s ease;
+}
+
+.landing-page .card:hover {
+  transform: translateY(-4px);
+}
+
+/* ─── Assignment Chips ────────────────────────── */
+.assignment-chip {
+  background: #e8f4fd;
+  border-radius: 6px;
+  padding: 4px 8px;
+  border: 1px solid #bee5eb;
+}
+
+.assignment-chip .btn {
+  font-size: 0.7rem;
+  line-height: 1;
+}
+
+/* ─── Schedule Table ──────────────────────────── */
+.schedule-table th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.schedule-table td {
+  vertical-align: top;
+  min-height: 60px;
+}
+
+.add-assignment-btn {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  opacity: 0.5;
+  transition: opacity 0.2s;
+}
+
+.add-assignment-btn:hover {
+  opacity: 1;
+}
+
+/* ─── Calendar Popup (inside Bootstrap modal) ─── */
+#calendar-container {
+  display: flex;
+  justify-content: center;
+}
+
+#calendar-container .flatpickr-calendar {
+  box-shadow: none !important;
+  border: 1px solid #dee2e6;
+  border-radius: 12px;
+  width: 100% !important;
+  max-width: 100%;
+}
+
+#calendar-container .flatpickr-day {
+  border-radius: 8px;
+  height: 48px;
+  line-height: 48px;
+  font-size: 1.05rem;
+}
+
+/* Selected = unavailable Sundays shown in red */
+#calendar-container .flatpickr-day.selected {
+  background: #e74c3c !important;
+  border-color: #c0392b !important;
+  color: #fff !important;
+  font-weight: 700;
+}
+
+/* Disabled (non-Sunday) days */
+#calendar-container .flatpickr-day.flatpickr-disabled {
+  color: #ccc !important;
+  text-decoration: line-through;
+}
+
+/* Enabled (Sunday) days that are NOT selected */
+#calendar-container .flatpickr-day:not(.flatpickr-disabled):not(.prevMonthDay):not(.nextMonthDay):not(.selected) {
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+/* Make the modal calendar responsive on mobile */
+#calendarModal .modal-dialog {
+  max-width: 440px;
+}
+
+/* ─── Responsive ──────────────────────────────── */
+@media (max-width: 768px) {
+  .landing-page {
+    padding: 20px 0;
+  }
+
+  .landing-page .display-4 {
+    font-size: 1.8rem;
+  }
+
+  #calendar-container .flatpickr-day {
+    height: 42px;
+    line-height: 42px;
+    font-size: 0.95rem;
+  }
+
+  #calendarModal .modal-dialog {
+    margin: 0.5rem;
+    max-width: calc(100% - 1rem);
+  }
+
+  .schedule-table {
+    font-size: 0.85rem;
+  }
+}
+
+/* ─── Alerts ──────────────────────────────────── */
+.alert {
+  border-radius: 10px;
+}
+
+/* ─── Countdown ───────────────────────────────── */
+#countdown {
+  font-size: 1.1em;
+  color: #e67e22;
+}
+
+/* ─── Badges ──────────────────────────────────── */
+.badge {
+  font-weight: 500;
+}
+
+/* ─── Form controls ───────────────────────────── */
+.form-control:focus,
+.form-select:focus {
+  border-color: #3498db;
+  box-shadow: 0 0 0 0.2rem rgba(52, 152, 219, 0.25);
+}
+
+/* ─── Navbar active state ─────────────────────── */
+.navbar .nav-link.active,
+.navbar .nav-link:hover {
+  opacity: 1;
+  font-weight: 600;
+}
+
+.navbar .nav-link {
+  opacity: 0.85;
+  transition: opacity 0.2s;
+}

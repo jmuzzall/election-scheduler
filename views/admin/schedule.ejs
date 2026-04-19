@@ -1,0 +1,196 @@
+<% const title = 'Schedule' %>
+<%- include('../partials/header') %>
+<%- include('../partials/admin-nav') %>
+
+<div class="container-fluid mt-4 px-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-calendar-check"></i> Schedule</h2>
+    <div>
+      <button class="btn btn-success" id="btnGenerate" onclick="generateSchedule()">
+        <i class="bi bi-lightning"></i> Generate Schedule
+      </button>
+      <a href="/api/export-schedule" class="btn btn-outline-primary ms-2">
+        <i class="bi bi-file-earmark-excel"></i> Export Excel
+      </a>
+    </div>
+  </div>
+
+  <% if (success) { %>
+    <div class="alert alert-success alert-dismissible fade show">
+      <i class="bi bi-check-circle"></i> <%= success %>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  <% } %>
+  <% if (error) { %>
+    <div class="alert alert-danger alert-dismissible fade show">
+      <i class="bi bi-exclamation-triangle"></i> <%= error %>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  <% } %>
+
+  <div id="generateResult" class="mb-3"></div>
+
+  <% const dates = Object.keys(scheduleGrid).sort(); %>
+  <% if (dates.length === 0 && locations.length > 0) { %>
+    <div class="text-center py-5 text-muted">
+      <i class="bi bi-calendar-x display-1"></i>
+      <p class="mt-3 lead">No schedule generated yet.</p>
+      <p>Configure your date range and locations, then click <strong>Generate Schedule</strong>.</p>
+    </div>
+  <% } else if (locations.length === 0) { %>
+    <div class="text-center py-5 text-muted">
+      <i class="bi bi-geo-alt display-1"></i>
+      <p class="mt-3 lead">No locations configured.</p>
+      <p><a href="/admin/locations">Add locations</a> before generating a schedule.</p>
+    </div>
+  <% } else if (dates.length > 0) { %>
+    <div class="card border-0 shadow-sm">
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-bordered table-hover mb-0 schedule-table">
+            <thead class="table-dark">
+              <tr>
+                <th style="min-width: 140px;">Date</th>
+                <% for (const loc of locations) { %>
+                  <th style="min-width: 180px;"><%= loc.name %> (<%= loc.slots_per_day %> slots)</th>
+                <% } %>
+              </tr>
+            </thead>
+            <tbody>
+              <% for (const date of dates) { %>
+                <%
+                  const d = new Date(date + 'T00:00:00');
+                  const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
+                  const formatted = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                %>
+                <tr>
+                  <td class="fw-bold">
+                    <span class="badge bg-primary me-1"><%= dayName %></span>
+                    <%= formatted %>
+                  </td>
+                  <% for (const loc of locations) { %>
+                    <td>
+                      <% const assigned = (scheduleGrid[date] && scheduleGrid[date][loc.id]) || []; %>
+                      <% for (const a of assigned) { %>
+                        <div class="assignment-chip d-flex justify-content-between align-items-center mb-1">
+                          <span class="small"><%= a.candidate_name %></span>
+                          <button class="btn btn-sm p-0 text-danger ms-1" title="Remove"
+                            onclick="removeAssignment(<%= a.id %>)">
+                            <i class="bi bi-x-circle-fill"></i>
+                          </button>
+                        </div>
+                      <% } %>
+                      <button class="btn btn-sm btn-outline-secondary add-assignment-btn"
+                        data-date="<%= date %>" data-location="<%= loc.id %>"
+                        onclick="openAddModal('<%= date %>', <%= loc.id %>, '<%= loc.name.replace(/'/g, "\\'") %>')">
+                        <i class="bi bi-plus"></i>
+                      </button>
+                    </td>
+                  <% } %>
+                </tr>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  <% } %>
+</div>
+
+<!-- Add Assignment Modal -->
+<div class="modal fade" id="addAssignmentModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Add Assignment</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p id="addAssignmentInfo"></p>
+        <input type="hidden" id="addDate">
+        <input type="hidden" id="addLocation">
+        <div class="mb-3">
+          <label class="form-label">Select Candidate</label>
+          <select class="form-select" id="addCandidate">
+            <% for (const c of candidates) { %>
+              <option value="<%= c.id %>"><%= c.name %></option>
+            <% } %>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="addAssignment()">Add</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+async function generateSchedule() {
+  if (!confirm('This will clear the current schedule and generate a new one. Continue?')) return;
+  const btn = document.getElementById('btnGenerate');
+  const result = document.getElementById('generateResult');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Generating...';
+
+  try {
+    const resp = await fetch('/api/generate-schedule', { method: 'POST' });
+    const data = await resp.json();
+    if (data.success) {
+      result.innerHTML = '<div class="alert alert-success">Schedule generated: ' +
+        data.totalAssignments + ' assignments across ' + data.sundays + ' Sundays and ' +
+        data.locations + ' locations.</div>';
+      setTimeout(() => location.reload(), 1500);
+    } else {
+      result.innerHTML = '<div class="alert alert-danger">' + data.error + '</div>';
+    }
+  } catch (err) {
+    result.innerHTML = '<div class="alert alert-danger">Failed to generate schedule.</div>';
+  }
+  btn.disabled = false;
+  btn.innerHTML = '<i class="bi bi-lightning"></i> Generate Schedule';
+}
+
+async function removeAssignment(id) {
+  if (!confirm('Remove this assignment?')) return;
+  try {
+    await fetch('/api/assignments/' + id + '/delete', { method: 'POST' });
+    location.reload();
+  } catch (err) {
+    alert('Failed to remove assignment.');
+  }
+}
+
+function openAddModal(date, locationId, locationName) {
+  document.getElementById('addDate').value = date;
+  document.getElementById('addLocation').value = locationId;
+  document.getElementById('addAssignmentInfo').textContent =
+    'Assign a candidate to ' + locationName + ' on ' + date;
+  new bootstrap.Modal(document.getElementById('addAssignmentModal')).show();
+}
+
+async function addAssignment() {
+  const date = document.getElementById('addDate').value;
+  const locationId = document.getElementById('addLocation').value;
+  const candidateId = document.getElementById('addCandidate').value;
+
+  try {
+    const resp = await fetch('/api/assignments/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ candidate_id: candidateId, location_id: locationId, date: date })
+    });
+    const data = await resp.json();
+    if (data.success) {
+      location.reload();
+    } else {
+      alert(data.error);
+    }
+  } catch (err) {
+    alert('Failed to add assignment.');
+  }
+}
+</script>
+
+<%- include('../partials/footer') %>
