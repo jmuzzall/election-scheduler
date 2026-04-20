@@ -28,13 +28,13 @@ router.get('/login', (req, res) => {
 
 router.post('/login', (req, res) => {
   const { email, password } = req.body;
-  const settings = db.queryOne('SELECT * FROM system_settings WHERE id = 1');
+  const admin = db.queryOne('SELECT * FROM admins WHERE email = ?', [email.trim().toLowerCase()]);
 
-  if (!settings || settings.admin_email !== email || !bcryptjs.compareSync(password, settings.admin_password_hash)) {
+  if (!admin || !bcryptjs.compareSync(password, admin.password_hash)) {
     return res.render('admin/login', { error: 'Invalid email or password' });
   }
 
-  req.session.admin = { email: settings.admin_email };
+  req.session.admin = { id: admin.id, email: admin.email, name: admin.name, is_super: !!admin.is_super };
   res.redirect('/admin/dashboard');
 });
 
@@ -60,15 +60,17 @@ router.get('/dashboard', requireAdmin, (req, res) => {
 // ─── Settings ──────────────────────────────────────
 router.get('/settings', requireAdmin, (req, res) => {
   const settings = db.queryOne('SELECT * FROM system_settings WHERE id = 1');
-  res.render('admin/settings', { settings, success: null, error: null });
+  const admins = db.queryAll('SELECT id, name, email, is_super, created_at FROM admins ORDER BY is_super DESC, name');
+  res.render('admin/settings', { settings, admins, success: req.query.success || null, error: req.query.error || null });
 });
 
 router.post('/settings', requireAdmin, (req, res) => {
   const { schedule_start_date, schedule_end_date, input_deadline } = req.body;
+  const admins = db.queryAll('SELECT id, name, email, is_super, created_at FROM admins ORDER BY is_super DESC, name');
 
   if (schedule_start_date && schedule_end_date && schedule_start_date > schedule_end_date) {
     const settings = db.queryOne('SELECT * FROM system_settings WHERE id = 1');
-    return res.render('admin/settings', { settings, success: null, error: 'Start date must be before end date.' });
+    return res.render('admin/settings', { settings, admins, success: null, error: 'Start date must be before end date.' });
   }
 
   db.run(
@@ -77,26 +79,68 @@ router.post('/settings', requireAdmin, (req, res) => {
   );
 
   const settings = db.queryOne('SELECT * FROM system_settings WHERE id = 1');
-  res.render('admin/settings', { settings, success: 'Settings saved successfully.', error: null });
+  res.render('admin/settings', { settings, admins, success: 'Settings saved successfully.', error: null });
 });
 
 router.post('/change-password', requireAdmin, (req, res) => {
   const { current_password, new_password } = req.body;
   const settings = db.queryOne('SELECT * FROM system_settings WHERE id = 1');
+  const adminRow = db.queryOne('SELECT * FROM admins WHERE id = ?', [req.session.admin.id]);
+  const admins = db.queryAll('SELECT id, name, email, is_super, created_at FROM admins ORDER BY is_super DESC, name');
 
-  if (!bcryptjs.compareSync(current_password, settings.admin_password_hash)) {
-    return res.render('admin/settings', { settings, success: null, error: 'Current password is incorrect.' });
+  const renderSettings = (success, error) =>
+    res.render('admin/settings', { settings, admins, success, error });
+
+  if (!adminRow || !bcryptjs.compareSync(current_password, adminRow.password_hash)) {
+    return renderSettings(null, 'Current password is incorrect.');
   }
 
   if (!new_password || new_password.length < 6) {
-    return res.render('admin/settings', { settings, success: null, error: 'New password must be at least 6 characters.' });
+    return renderSettings(null, 'New password must be at least 6 characters.');
   }
 
   const hash = bcryptjs.hashSync(new_password, 10);
-  db.run('UPDATE system_settings SET admin_password_hash = ? WHERE id = 1', [hash]);
+  db.run('UPDATE admins SET password_hash = ? WHERE id = ?', [hash, req.session.admin.id]);
+  return renderSettings('Password changed successfully.', null);
+});
 
-  const updatedSettings = db.queryOne('SELECT * FROM system_settings WHERE id = 1');
-  res.render('admin/settings', { settings: updatedSettings, success: 'Password changed successfully.', error: null });
+// ─── Admin User Management ──────────────────────────
+router.post('/admins/add', requireAdmin, (req, res) => {
+  const { name, email, password } = req.body;
+
+  if (!name || !email || !password || password.length < 6) {
+    return res.redirect('/admin/settings?error=' + encodeURIComponent('All fields required; password must be at least 6 characters.'));
+  }
+
+  try {
+    const hash = bcryptjs.hashSync(password, 10);
+    db.run('INSERT INTO admins (name, email, password_hash, is_super) VALUES (?, ?, ?, 0)',
+      [name.trim(), email.trim().toLowerCase(), hash]);
+    res.redirect('/admin/settings?success=' + encodeURIComponent(`Admin "${name}" added successfully.`));
+  } catch (err) {
+    if (err.message && err.message.includes('UNIQUE')) {
+      res.redirect('/admin/settings?error=' + encodeURIComponent('An admin with that email already exists.'));
+    } else {
+      res.redirect('/admin/settings?error=' + encodeURIComponent(err.message));
+    }
+  }
+});
+
+router.post('/admins/:id/delete', requireAdmin, (req, res) => {
+  const target = db.queryOne('SELECT * FROM admins WHERE id = ?', [req.params.id]);
+
+  if (!target) {
+    return res.redirect('/admin/settings?error=Admin not found.');
+  }
+  if (target.is_super) {
+    return res.redirect('/admin/settings?error=' + encodeURIComponent('The super admin cannot be deleted.'));
+  }
+  if (target.id === req.session.admin.id) {
+    return res.redirect('/admin/settings?error=' + encodeURIComponent('You cannot delete your own account.'));
+  }
+
+  db.run('DELETE FROM admins WHERE id = ?', [req.params.id]);
+  res.redirect('/admin/settings?success=' + encodeURIComponent(`Admin "${target.name}" removed.`));
 });
 
 // ─── Candidates ────────────────────────────────────

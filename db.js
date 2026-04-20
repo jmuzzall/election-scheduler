@@ -33,8 +33,19 @@ async function initialize() {
       input_deadline TEXT,
       schedule_start_date TEXT,
       schedule_end_date TEXT,
-      admin_email TEXT NOT NULL,
-      admin_password_hash TEXT NOT NULL
+      admin_email TEXT NOT NULL DEFAULT '',
+      admin_password_hash TEXT NOT NULL DEFAULT ''
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS admins (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      email TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      is_super INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now'))
     )
   `);
 
@@ -98,13 +109,27 @@ async function initialize() {
     )
   `);
 
-  // Seed default admin if not exists
-  const admin = queryOne('SELECT * FROM system_settings WHERE id = 1');
-  if (!admin) {
-    const hash = bcryptjs.hashSync('admin123', 10);
-    run('INSERT INTO system_settings (id, admin_email, admin_password_hash) VALUES (1, ?, ?)',
-      ['jim.muzzall@gmail.com', hash]);
-    console.log('Default admin created: jim.muzzall@gmail.com / admin123');
+  // Ensure system_settings row exists (schedule config only now)
+  const settings = queryOne('SELECT * FROM system_settings WHERE id = 1');
+  if (!settings) {
+    run('INSERT INTO system_settings (id, admin_email, admin_password_hash) VALUES (1, \'\', \'\')', []);
+  }
+
+  // Seed super admin into admins table if empty
+  const anyAdmin = queryOne('SELECT id FROM admins LIMIT 1');
+  if (!anyAdmin) {
+    // Migrate from legacy system_settings if credentials were stored there
+    const legacy = queryOne('SELECT * FROM system_settings WHERE id = 1');
+    if (legacy && legacy.admin_email && legacy.admin_password_hash) {
+      run('INSERT INTO admins (name, email, password_hash, is_super) VALUES (?, ?, ?, 1)',
+        ['Administrator', legacy.admin_email, legacy.admin_password_hash]);
+      console.log('Migrated existing admin to admins table:', legacy.admin_email);
+    } else {
+      const hash = bcryptjs.hashSync('admin123', 10);
+      run('INSERT INTO admins (name, email, password_hash, is_super) VALUES (?, ?, ?, 1)',
+        ['Administrator', 'jim.muzzall@gmail.com', hash]);
+      console.log('Default super admin created: jim.muzzall@gmail.com / admin123');
+    }
   }
 
   save();
