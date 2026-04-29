@@ -82,7 +82,29 @@ function preprocessCandidates(settings) {
 }
 
 /**
+ * Try to assign one candidate to a slot.
+ * Returns true and mutates tracking state if successful, false otherwise.
+ */
+function tryAssign(candidate, locationId, sunday, blackoutSet, shiftCounts, dailyAssigned, allAssignments) {
+  if (blackoutSet.has(`${candidate.id}-${sunday}`)) return false;
+  if (dailyAssigned[sunday].has(candidate.id)) return false;
+
+  allAssignments.push({ candidate_id: candidate.id, location_id: locationId, date: sunday });
+  shiftCounts[candidate.id]++;
+  dailyAssigned[sunday].add(candidate.id);
+  return true;
+}
+
+/**
  * Main scheduling algorithm.
+ *
+ * Two-pass approach per slot:
+ *   Pass 1 — candidates under their max_shifts cap (randomised order)
+ *   Pass 2 — any remaining available candidates, sorted fewest shifts first,
+ *             so the extra load is spread as evenly as possible
+ *
+ * Blackout dates are always a hard constraint and are never overridden.
+ * A slot is only left empty when every candidate is blacked out on that date.
  */
 function generateSchedule() {
   const settings = db.queryOne('SELECT * FROM system_settings WHERE id = 1');
@@ -114,7 +136,7 @@ function generateSchedule() {
     throw new Error('No candidates found. Upload candidates before generating a schedule.');
   }
 
-  // Build blackout set for fast lookup
+  // Build blackout set for fast lookup: "candidateId-date"
   const blackoutRows = db.queryAll('SELECT candidate_id, date FROM blackout_dates');
   const blackoutSet = new Set(blackoutRows.map(r => `${r.candidate_id}-${r.date}`));
 
@@ -124,30 +146,42 @@ function generateSchedule() {
   candidates.forEach(c => { shiftCounts[c.id] = 0; });
 
   const allAssignments = [];
+  let unfilledSlots = 0;
 
   for (const sunday of sundays) {
     dailyAssigned[sunday] = new Set();
-    const shuffled = shuffle(candidates);
 
     for (const location of locations) {
       let slotsRemaining = location.slots_per_day;
 
-      for (const candidate of shuffled) {
+      // ── Pass 1: candidates under their max_shifts cap (randomised) ──────
+      const underCap = shuffle(candidates).filter(
+        c => shiftCounts[c.id] < c.max_shifts
+      );
+      for (const candidate of underCap) {
         if (slotsRemaining <= 0) break;
-        if (blackoutSet.has(`${candidate.id}-${sunday}`)) continue;
-        if (shiftCounts[candidate.id] >= candidate.max_shifts) continue;
-        if (dailyAssigned[sunday].has(candidate.id)) continue;
-
-        allAssignments.push({
-          candidate_id: candidate.id,
-          location_id: location.id,
-          date: sunday
-        });
-
-        shiftCounts[candidate.id]++;
-        dailyAssigned[sunday].add(candidate.id);
-        slotsRemaining--;
+        if (tryAssign(candidate, location.id, sunday, blackoutSet, shiftCounts, dailyAssigned, allAssignments)) {
+          slotsRemaining--;
+        }
       }
+
+      // ── Pass 2: relax max_shifts — sort by fewest shifts first so the
+      //            extra burden is spread as evenly as possible ────────────
+      if (slotsRemaining > 0) {
+        const overCap = candidates
+          .filter(c => shiftCounts[c.id] >= c.max_shifts)
+          .sort((a, b) => shiftCounts[a.id] - shiftCounts[b.id]);
+
+        for (const candidate of overCap) {
+          if (slotsRemaining <= 0) break;
+          if (tryAssign(candidate, location.id, sunday, blackoutSet, shiftCounts, dailyAssigned, allAssignments)) {
+            slotsRemaining--;
+          }
+        }
+      }
+
+      // Any remaining slots truly cannot be filled (everyone is blacked out)
+      unfilledSlots += slotsRemaining;
     }
   }
 
@@ -161,6 +195,7 @@ function generateSchedule() {
 
   return {
     totalAssignments: allAssignments.length,
+    unfilledSlots,
     sundays: sundays.length,
     locations: locations.length,
     candidates: candidates.length

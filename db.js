@@ -55,7 +55,7 @@ async function initialize() {
       name TEXT NOT NULL,
       email TEXT UNIQUE NOT NULL,
       password_hash TEXT,
-      max_shifts INTEGER DEFAULT 4,
+      max_shifts INTEGER DEFAULT 26,
       has_submitted_input INTEGER DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now'))
     )

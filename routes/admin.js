@@ -155,7 +155,7 @@ router.post('/candidates/add', requireAdmin, (req, res) => {
 
   try {
     db.run('INSERT INTO candidates (name, email, max_shifts) VALUES (?, ?, ?)',
-      [name.trim(), email.trim().toLowerCase(), parseInt(max_shifts) || 4]);
+      [name.trim(), email.trim().toLowerCase(), parseInt(max_shifts) || 26]);
     res.redirect('/admin/candidates?success=Candidate added successfully.');
   } catch (err) {
     if (err.message && err.message.includes('UNIQUE')) {
@@ -214,7 +214,7 @@ router.post('/candidates/:id/edit', requireAdmin, (req, res) => {
 
   try {
     db.run('UPDATE candidates SET name = ?, email = ?, max_shifts = ? WHERE id = ?',
-      [name.trim(), email.trim().toLowerCase(), parseInt(max_shifts) || 4, req.params.id]);
+      [name.trim(), email.trim().toLowerCase(), parseInt(max_shifts) || 26, req.params.id]);
     res.redirect('/admin/candidates?success=Candidate updated.');
   } catch (err) {
     res.redirect('/admin/candidates?error=' + encodeURIComponent(err.message));

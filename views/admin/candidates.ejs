@@ -19,8 +19,9 @@
   <% } %>
 
   <div class="row g-4">
-    <!-- Add / Import -->
+    <!-- Add / Import / Actions -->
     <div class="col-lg-4">
+
       <!-- Add Single Candidate -->
       <div class="card border-0 shadow-sm mb-3">
         <div class="card-header bg-white fw-bold">
@@ -35,7 +36,7 @@
               <input type="email" class="form-control" name="email" placeholder="Email" required>
             </div>
             <div class="mb-2">
-              <input type="number" class="form-control" name="max_shifts" placeholder="Max Shifts" value="4" min="1">
+              <input type="number" class="form-control" name="max_shifts" placeholder="Max Shifts" value="26" min="1">
             </div>
             <button type="submit" class="btn btn-primary w-100">
               <i class="bi bi-plus-lg"></i> Add
@@ -64,8 +65,8 @@
         </div>
       </div>
 
-      <!-- Bulk Actions -->
-      <div class="card border-0 shadow-sm">
+      <!-- Magic Links -->
+      <div class="card border-0 shadow-sm mb-3">
         <div class="card-header bg-white fw-bold">
           <i class="bi bi-envelope"></i> Magic Links
         </div>
@@ -76,6 +77,22 @@
           <div id="sendAllResult" class="mt-2"></div>
         </div>
       </div>
+
+      <!-- Export Blackout Dates -->
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white fw-bold">
+          <i class="bi bi-calendar-x"></i> Blackout Dates
+        </div>
+        <div class="card-body">
+          <p class="text-muted small mb-2">
+            Download an Excel file of all candidates' blackout dates, grouped by date.
+          </p>
+          <a href="/api/export-blackouts" class="btn btn-outline-success w-100">
+            <i class="bi bi-file-earmark-excel"></i> Export Blackout Dates
+          </a>
+        </div>
+      </div>
+
     </div>
 
     <!-- Candidate List -->
@@ -106,7 +123,6 @@
                   <% for (const c of candidates) { %>
                     <tr>
                       <td>
-                        <!-- Display name; click to edit -->
                         <span class="candidate-name" data-id="<%= c.id %>"><%= c.name %></span>
                       </td>
                       <td class="text-muted small"><%= c.email %></td>
