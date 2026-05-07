@@ -75,4 +75,46 @@ async function sendMagicLink(email, name, token) {
   return link;
 }
 
-module.exports = { sendMagicLink };
+async function sendPasswordReset(email, name, token) {
+  const appUrl = process.env.APP_URL || 'http://localhost:3000';
+  const link = `${appUrl}/candidate/reset-password?token=${token}`;
+  const transport = getTransporter();
+
+  await transport.sendMail({
+    from: `"Scheduling System" <${process.env.SMTP_USER || 'noreply@localhost'}>`,
+    to: email,
+    subject: 'Reset Your Scheduling Portal Password',
+    text: [
+      `Hello ${name},`,
+      '',
+      'We received a request to reset your password for the Sunday Duty Scheduling portal.',
+      '',
+      'Click the link below to choose a new password:',
+      link,
+      '',
+      'This link will expire in 1 hour.',
+      '',
+      'If you did not request a password reset, you can safely ignore this email.',
+      '',
+      '— Scheduling System'
+    ].join('\n'),
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #2c3e50;">Password Reset</h2>
+        <p>Hello <strong>${name}</strong>,</p>
+        <p>We received a request to reset your password for the Sunday Duty Scheduling portal.</p>
+        <p style="margin: 24px 0;">
+          <a href="${link}" style="background: #e67e22; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">
+            Reset My Password
+          </a>
+        </p>
+        <p style="color: #7f8c8d; font-size: 13px;">This link expires in 1 hour.</p>
+        <p style="color: #7f8c8d; font-size: 13px;">If you did not request a password reset, you can safely ignore this email.</p>
+      </div>
+    `
+  });
+
+  return link;
+}
+
+module.exports = { sendMagicLink, sendPasswordReset };

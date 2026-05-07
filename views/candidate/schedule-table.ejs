@@ -1,0 +1,48 @@
+<% const dates = Object.keys(scheduleGrid).sort(); %>
+<div class="card border-0 shadow-sm">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-bordered mb-0">
+        <thead class="table-dark">
+          <tr>
+            <th style="min-width:140px;">Date</th>
+            <% for (const loc of locations) { %>
+              <th style="min-width:180px;"><%= loc.name %></th>
+            <% } %>
+          </tr>
+        </thead>
+        <tbody>
+          <% for (const date of dates) { %>
+            <%
+              const d = new Date(date + 'T00:00:00');
+              const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
+              const formatted = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+              const isMine = myDates.includes(date);
+            %>
+            <tr data-date="<%= date %>" class="<%= isMine ? 'my-row' : '' %>">
+              <td class="fw-bold">
+                <span class="badge <%= isMine ? 'bg-success' : 'bg-primary' %> me-1"><%= dayName %></span>
+                <%= formatted %>
+                <% if (isMine) { %><i class="bi bi-person-fill text-success ms-1" title="You are serving"></i><% } %>
+              </td>
+              <% for (const loc of locations) { %>
+                <td>
+                  <% const people = (scheduleGrid[date] && scheduleGrid[date][loc.id]) || []; %>
+                  <% for (const p of people) { %>
+                    <div class="<%= p.isMe ? 'my-name' : '' %> small">
+                      <% if (p.isMe) { %><i class="bi bi-star-fill text-warning me-1" title="You"></i><% } %>
+                      <%= p.name %>
+                    </div>
+                  <% } %>
+                  <% if (people.length === 0) { %>
+                    <span class="text-muted small fst-italic">—</span>
+                  <% } %>
+                </td>
+              <% } %>
+            </tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>

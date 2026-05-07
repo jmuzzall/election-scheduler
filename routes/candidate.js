@@ -1,8 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const bcryptjs = require('bcryptjs');
+const crypto = require('crypto');
 const db = require('../db');
 const { requireCandidate } = require('../middleware/auth');
+const mailer = require('../services/mailer');
 
 // ─── Magic Link Authentication (still works as fallback) ──
 router.get('/auth', (req, res) => {
@@ -178,6 +180,136 @@ router.post('/save-blackouts', requireCandidate, (req, res) => {
   });
 
   res.json({ success: true, message: 'Your availability has been saved.' });
+});
+
+// ─── Schedule View ─────────────────────────────────
+router.get('/schedule', requireCandidate, (req, res) => {
+  const settings = db.queryOne('SELECT * FROM system_settings WHERE id = 1');
+  const locations = db.queryAll('SELECT * FROM locations ORDER BY name');
+
+  const assignments = db.queryAll(`
+    SELECT a.date, a.candidate_id, a.location_id,
+           c.name AS candidate_name, l.name AS location_name
+    FROM assignments a
+    JOIN candidates c ON a.candidate_id = c.id
+    JOIN locations l ON a.location_id = l.id
+    ORDER BY a.date, l.name, c.name
+  `);
+
+  // Build grid: date → location_id → [{name, isMe}]
+  const scheduleGrid = {};
+  const myDates = new Set();
+
+  for (const a of assignments) {
+    if (!scheduleGrid[a.date]) scheduleGrid[a.date] = {};
+    if (!scheduleGrid[a.date][a.location_id]) scheduleGrid[a.date][a.location_id] = [];
+    const isMe = a.candidate_id === req.session.candidate.id;
+    scheduleGrid[a.date][a.location_id].push({ name: a.candidate_name, isMe });
+    if (isMe) myDates.add(a.date);
+  }
+
+  res.render('candidate/schedule', {
+    candidate: req.session.candidate,
+    settings,
+    locations,
+    scheduleGrid,
+    myDates: [...myDates],
+    hasSchedule: assignments.length > 0
+  });
+});
+
+// ─── Forgot Password ───────────────────────────────
+router.get('/forgot-password', (req, res) => {
+  if (req.session.candidate) return res.redirect('/candidate/portal');
+  res.render('candidate/forgot-password', { sent: false, error: null });
+});
+
+router.post('/forgot-password', async (req, res) => {
+  const email = (req.body.email || '').trim().toLowerCase();
+  const candidate = db.queryOne('SELECT * FROM candidates WHERE email = ?', [email]);
+
+  // Always show "sent" to prevent email enumeration, but only send if account + password exist
+  if (candidate && candidate.password_hash) {
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour
+
+    db.run(
+      'INSERT INTO candidate_reset_tokens (candidate_id, token, expires_at) VALUES (?, ?, ?)',
+      [candidate.id, token, expiresAt]
+    );
+
+    try {
+      const link = await mailer.sendPasswordReset(candidate.email, candidate.name, token);
+      if (link) console.log('Password reset link (dev):', link);
+    } catch (err) {
+      console.error('Failed to send reset email:', err.message);
+    }
+  }
+
+  res.render('candidate/forgot-password', { sent: true, error: null });
+});
+
+// ─── Reset Password ────────────────────────────────
+router.get('/reset-password', (req, res) => {
+  const { token } = req.query;
+  if (!token) return res.redirect('/candidate/login');
+
+  const record = db.queryOne(`
+    SELECT rt.*, c.name, c.email
+    FROM candidate_reset_tokens rt
+    JOIN candidates c ON rt.candidate_id = c.id
+    WHERE rt.token = ?
+  `, [token]);
+
+  const valid = record && !record.used && new Date(record.expires_at) >= new Date();
+  res.render('candidate/reset-password', {
+    valid,
+    token,
+    error: valid ? null : 'This reset link is invalid or has expired.',
+    success: false
+  });
+});
+
+router.post('/reset-password', (req, res) => {
+  const { token, new_password, confirm_password } = req.body;
+
+  const record = db.queryOne(`
+    SELECT rt.*, c.name, c.email
+    FROM candidate_reset_tokens rt
+    JOIN candidates c ON rt.candidate_id = c.id
+    WHERE rt.token = ?
+  `, [token]);
+
+  const valid = record && !record.used && new Date(record.expires_at) >= new Date();
+  if (!valid) {
+    return res.render('candidate/reset-password', {
+      valid: false, token,
+      error: 'This reset link is invalid or has expired.',
+      success: false
+    });
+  }
+
+  if (!new_password || new_password.length < 6) {
+    return res.render('candidate/reset-password', {
+      valid: true, token,
+      error: 'Password must be at least 6 characters.',
+      success: false
+    });
+  }
+
+  if (new_password !== confirm_password) {
+    return res.render('candidate/reset-password', {
+      valid: true, token,
+      error: 'Passwords do not match.',
+      success: false
+    });
+  }
+
+  const hash = bcryptjs.hashSync(new_password, 10);
+  db.run('UPDATE candidates SET password_hash = ? WHERE id = ?', [hash, record.candidate_id]);
+  db.run('UPDATE candidate_reset_tokens SET used = 1 WHERE id = ?', [record.id]);
+
+  res.render('candidate/reset-password', { valid: true, token, error: null, success: true });
 });
 
 // ─── Logout ────────────────────────────────────────

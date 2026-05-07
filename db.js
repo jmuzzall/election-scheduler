@@ -109,6 +109,17 @@ async function initialize() {
     )
   `);
 
+  db.run(`
+    CREATE TABLE IF NOT EXISTS candidate_reset_tokens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      candidate_id INTEGER NOT NULL,
+      token TEXT UNIQUE NOT NULL,
+      expires_at TEXT NOT NULL,
+      used INTEGER DEFAULT 0,
+      FOREIGN KEY (candidate_id) REFERENCES candidates(id) ON DELETE CASCADE
+    )
+  `);
+
   // Ensure system_settings row exists (schedule config only now)
   const settings = queryOne('SELECT * FROM system_settings WHERE id = 1');
   if (!settings) {

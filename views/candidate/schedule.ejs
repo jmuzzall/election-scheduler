@@ -1,0 +1,83 @@
+<% const title = 'Schedule' %>
+<% const activePage = 'schedule' %>
+<%- include('../partials/header') %>
+<%- include('../partials/candidate-nav') %>
+
+<div class="container-fluid mt-4 px-4">
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h2 class="mb-0"><i class="bi bi-calendar-check"></i> Schedule</h2>
+
+    <% if (hasSchedule && myDates.length > 0) { %>
+      <div class="btn-group" role="group">
+        <button type="button" class="btn btn-success active" id="btnAll" onclick="showAll()">
+          <i class="bi bi-calendar3"></i> All Sundays
+        </button>
+        <button type="button" class="btn btn-outline-success" id="btnMine" onclick="showMine()">
+          <i class="bi bi-person-check"></i> My Sundays (<%= myDates.length %>)
+        </button>
+      </div>
+    <% } %>
+  </div>
+
+  <% if (!hasSchedule) { %>
+    <div class="text-center py-5 text-muted">
+      <i class="bi bi-calendar-x display-1"></i>
+      <p class="mt-3 lead">The schedule hasn't been published yet.</p>
+      <p>Check back after the administrator generates the schedule.</p>
+    </div>
+
+  <% } else if (myDates.length === 0) { %>
+    <div class="alert alert-info shadow-sm border-0">
+      <i class="bi bi-info-circle"></i>
+      The schedule has been generated, but <strong><%= candidate.name %></strong> has no assigned Sundays.
+      Contact the administrator if you believe this is incorrect.
+    </div>
+
+    <%- include('./schedule-table') %>
+
+  <% } else { %>
+    <div class="alert alert-success shadow-sm border-0 mb-3">
+      <i class="bi bi-person-check-fill"></i>
+      <strong><%= candidate.name %></strong>, you are scheduled for
+      <strong><%= myDates.length %> Sunday<%= myDates.length !== 1 ? 's' : '' %></strong>.
+      Your dates are highlighted in green below.
+    </div>
+
+    <%- include('./schedule-table') %>
+  <% } %>
+</div>
+
+<style>
+  .my-row { background-color: #d4edda !important; }
+  .my-name { font-weight: 700; color: #155724; }
+  tr.hidden-row { display: none; }
+</style>
+
+<script>
+  const myDates = <%- JSON.stringify(myDates) %>;
+
+  function showAll() {
+    document.querySelectorAll('tr[data-date]').forEach(r => r.classList.remove('hidden-row'));
+    document.getElementById('btnAll').classList.add('active');
+    document.getElementById('btnAll').classList.remove('btn-outline-success');
+    document.getElementById('btnAll').classList.add('btn-success');
+    document.getElementById('btnMine').classList.remove('active');
+    document.getElementById('btnMine').classList.add('btn-outline-success');
+    document.getElementById('btnMine').classList.remove('btn-success');
+  }
+
+  function showMine() {
+    document.querySelectorAll('tr[data-date]').forEach(r => {
+      const date = r.getAttribute('data-date');
+      r.classList.toggle('hidden-row', !myDates.includes(date));
+    });
+    document.getElementById('btnMine').classList.add('active');
+    document.getElementById('btnMine').classList.remove('btn-outline-success');
+    document.getElementById('btnMine').classList.add('btn-success');
+    document.getElementById('btnAll').classList.remove('active');
+    document.getElementById('btnAll').classList.add('btn-outline-success');
+    document.getElementById('btnAll').classList.remove('btn-success');
+  }
+</script>
+
+<%- include('../partials/footer') %>
