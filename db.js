@@ -120,6 +120,24 @@ async function initialize() {
     )
   `);
 
+  db.run(`
+    CREATE TABLE IF NOT EXISTS swap_requests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      requester_id INTEGER NOT NULL,
+      requester_assignment_id INTEGER NOT NULL,
+      target_id INTEGER NOT NULL,
+      target_assignment_id INTEGER NOT NULL,
+      status TEXT DEFAULT 'pending',
+      message TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      resolved_at TEXT,
+      FOREIGN KEY (requester_id) REFERENCES candidates(id) ON DELETE CASCADE,
+      FOREIGN KEY (target_id) REFERENCES candidates(id) ON DELETE CASCADE,
+      FOREIGN KEY (requester_assignment_id) REFERENCES assignments(id) ON DELETE CASCADE,
+      FOREIGN KEY (target_assignment_id) REFERENCES assignments(id) ON DELETE CASCADE
+    )
+  `);
+
   // Ensure system_settings row exists (schedule config only now)
   const settings = queryOne('SELECT * FROM system_settings WHERE id = 1');
   if (!settings) {

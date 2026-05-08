@@ -20,6 +20,15 @@
             <i class="bi bi-calendar-check"></i> View Schedule
           </a>
         </li>
+        <li class="nav-item">
+          <a class="nav-link <%= typeof activePage !== 'undefined' && activePage === 'swaps' ? 'active fw-bold' : '' %>"
+            href="/candidate/swaps">
+            <i class="bi bi-arrow-left-right"></i> Swap Requests
+            <% if (typeof pendingSwapCount !== 'undefined' && pendingSwapCount > 0) { %>
+              <span class="badge bg-warning text-dark ms-1"><%= pendingSwapCount %></span>
+            <% } %>
+          </a>
+        </li>
       </ul>
       <ul class="navbar-nav">
         <li class="nav-item">

@@ -117,4 +117,112 @@ async function sendPasswordReset(email, name, token) {
   return link;
 }
 
-module.exports = { sendMagicLink, sendPasswordReset };
+/**
+ * Notify the swap target that someone wants to trade with them.
+ * requesterAssignment / targetAssignment: { date, location_name }
+ */
+async function sendSwapRequest(targetEmail, targetName, requesterName, requesterAssignment, targetAssignment, message) {
+  const appUrl = process.env.APP_URL || 'http://localhost:3000';
+  const link = `${appUrl}/candidate/swaps`;
+  const transport = getTransporter();
+
+  const msgBlock = message ? `\n\nMessage from ${requesterName}: "${message}"` : '';
+
+  await transport.sendMail({
+    from: `"Scheduling System" <${process.env.SMTP_USER || 'noreply@localhost'}>`,
+    to: targetEmail,
+    subject: `Swap Request from ${requesterName}`,
+    text: [
+      `Hello ${targetName},`,
+      '',
+      `${requesterName} has proposed a schedule swap with you:`,
+      '',
+      `  They offer:  ${requesterAssignment.date} — ${requesterAssignment.location_name}`,
+      `  In exchange: ${targetAssignment.date} — ${targetAssignment.location_name} (yours)`,
+      msgBlock,
+      '',
+      'Log in to review and respond:',
+      link,
+      '',
+      '— Scheduling System'
+    ].join('\n'),
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+        <h2 style="color:#1B3A5C;">Schedule Swap Request</h2>
+        <p>Hello <strong>${targetName}</strong>,</p>
+        <p><strong>${requesterName}</strong> would like to swap Sunday duties with you:</p>
+        <table style="border-collapse:collapse;width:100%;margin:16px 0;">
+          <tr style="background:#f0f4f8;">
+            <td style="padding:10px;border:1px solid #cdd9e8;font-weight:bold;">They offer</td>
+            <td style="padding:10px;border:1px solid #cdd9e8;">${requesterAssignment.date} &mdash; ${requesterAssignment.location_name}</td>
+          </tr>
+          <tr>
+            <td style="padding:10px;border:1px solid #cdd9e8;font-weight:bold;">You give up</td>
+            <td style="padding:10px;border:1px solid #cdd9e8;">${targetAssignment.date} &mdash; ${targetAssignment.location_name}</td>
+          </tr>
+        </table>
+        ${message ? `<p style="background:#fff8e1;padding:10px;border-left:4px solid #C5963A;">${requesterName} says: "${message}"</p>` : ''}
+        <p style="margin:24px 0;">
+          <a href="${link}" style="background:#1B3A5C;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;font-weight:bold;">
+            Review Swap Request
+          </a>
+        </p>
+        <p style="color:#7f8c8d;font-size:13px;">Log in to approve or decline this request.</p>
+      </div>
+    `
+  });
+  return link;
+}
+
+/**
+ * Notify the requester that their swap was approved or declined.
+ */
+async function sendSwapResolved(requesterEmail, requesterName, targetName, approved, requesterAssignment, targetAssignment) {
+  const appUrl = process.env.APP_URL || 'http://localhost:3000';
+  const transport = getTransporter();
+  const status = approved ? 'Approved' : 'Declined';
+  const color = approved ? '#27ae60' : '#e74c3c';
+
+  await transport.sendMail({
+    from: `"Scheduling System" <${process.env.SMTP_USER || 'noreply@localhost'}>`,
+    to: requesterEmail,
+    subject: `Swap ${status} by ${targetName}`,
+    text: approved
+      ? [
+          `Hello ${requesterName},`,
+          '',
+          `Great news — ${targetName} approved your swap request.`,
+          '',
+          `You are now assigned: ${targetAssignment.date} — ${targetAssignment.location_name}`,
+          `${targetName} is now assigned: ${requesterAssignment.date} — ${requesterAssignment.location_name}`,
+          '',
+          '— Scheduling System'
+        ].join('\n')
+      : [
+          `Hello ${requesterName},`,
+          '',
+          `${targetName} has declined your swap request.`,
+          '',
+          `Your assignment remains: ${requesterAssignment.date} — ${requesterAssignment.location_name}`,
+          '',
+          '— Scheduling System'
+        ].join('\n'),
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+        <h2 style="color:${color};">Swap ${status}</h2>
+        <p>Hello <strong>${requesterName}</strong>,</p>
+        ${approved
+          ? `<p><strong>${targetName}</strong> approved your swap. Your schedule has been updated:</p>
+             <table style="border-collapse:collapse;width:100%;margin:16px 0;">
+               <tr style="background:#f0f4f8;"><td style="padding:10px;border:1px solid #cdd9e8;font-weight:bold;">Your new assignment</td>
+               <td style="padding:10px;border:1px solid #cdd9e8;">${targetAssignment.date} &mdash; ${targetAssignment.location_name}</td></tr>
+             </table>`
+          : `<p><strong>${targetName}</strong> declined your swap request. Your original assignment remains unchanged.</p>`
+        }
+        <p style="color:#7f8c8d;font-size:13px;">Log in to view the current schedule.</p>
+      </div>
+    `
+  });
+}
+
+module.exports = { sendMagicLink, sendPasswordReset, sendSwapRequest, sendSwapResolved };

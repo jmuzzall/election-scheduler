@@ -1,0 +1,239 @@
+<% const title = 'Swap Requests' %>
+<% const activePage = 'swaps' %>
+<%- include('../partials/header') %>
+<%- include('../partials/candidate-nav') %>
+
+<div class="container mt-4 px-4">
+  <h2 class="mb-4"><i class="bi bi-arrow-left-right"></i> Swap Requests</h2>
+
+  <% if (success) { %>
+    <div class="alert alert-success alert-dismissible fade show shadow-sm border-0" role="alert">
+      <i class="bi bi-check-circle-fill me-2"></i><%= success %>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  <% } %>
+
+  <% if (error) { %>
+    <div class="alert alert-danger alert-dismissible fade show shadow-sm border-0" role="alert">
+      <i class="bi bi-exclamation-triangle-fill me-2"></i><%= error %>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  <% } %>
+
+  <!-- ── Incoming Requests ──────────────────────────── -->
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-header d-flex align-items-center gap-2" style="background:var(--mp-navy);color:#fff;">
+      <i class="bi bi-inbox-fill"></i>
+      <strong>Incoming Requests</strong>
+      <% if (incoming.length > 0) { %>
+        <span class="badge bg-warning text-dark ms-1"><%= incoming.length %></span>
+      <% } %>
+    </div>
+    <div class="card-body p-0">
+      <% if (incoming.length === 0) { %>
+        <div class="text-center text-muted py-4">
+          <i class="bi bi-inbox display-6 d-block mb-2"></i>
+          No pending swap requests for you right now.
+        </div>
+      <% } else { %>
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>From</th>
+                <th>They Offer</th>
+                <th>They Want (Yours)</th>
+                <th>Message</th>
+                <th>Received</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <% for (const r of incoming) { %>
+                <tr>
+                  <td><strong><%= r.requester_name %></strong></td>
+                  <td>
+                    <span class="badge bg-success me-1">Sun</span>
+                    <%= r.requester_date %><br>
+                    <small class="text-muted"><i class="bi bi-geo-alt"></i> <%= r.requester_location %></small>
+                  </td>
+                  <td>
+                    <span class="badge bg-primary me-1">Sun</span>
+                    <%= r.target_date %><br>
+                    <small class="text-muted"><i class="bi bi-geo-alt"></i> <%= r.target_location %></small>
+                  </td>
+                  <td>
+                    <% if (r.message) { %>
+                      <span class="text-muted small fst-italic">"<%= r.message %>"</span>
+                    <% } else { %>
+                      <span class="text-muted small">—</span>
+                    <% } %>
+                  </td>
+                  <td><small class="text-muted"><%= new Date(r.created_at).toLocaleDateString('en-US', {month:'short',day:'numeric'}) %></small></td>
+                  <td class="text-nowrap">
+                    <form method="POST" action="/candidate/swaps/<%= r.id %>/approve" class="d-inline">
+                      <button type="submit" class="btn btn-success btn-sm me-1"
+                        onclick="return confirm('Approve this swap? Your schedules will be exchanged immediately.')">
+                        <i class="bi bi-check-lg"></i> Approve
+                      </button>
+                    </form>
+                    <form method="POST" action="/candidate/swaps/<%= r.id %>/decline" class="d-inline">
+                      <button type="submit" class="btn btn-outline-danger btn-sm"
+                        onclick="return confirm('Decline this swap request?')">
+                        <i class="bi bi-x-lg"></i> Decline
+                      </button>
+                    </form>
+                  </td>
+                </tr>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      <% } %>
+    </div>
+  </div>
+
+  <!-- ── Outgoing Requests ──────────────────────────── -->
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-header d-flex align-items-center gap-2" style="background:var(--mp-navy);color:#fff;">
+      <i class="bi bi-send-fill"></i>
+      <strong>Outgoing Requests</strong>
+      <% if (outgoing.length > 0) { %>
+        <span class="badge bg-secondary ms-1"><%= outgoing.length %></span>
+      <% } %>
+    </div>
+    <div class="card-body p-0">
+      <% if (outgoing.length === 0) { %>
+        <div class="text-center text-muted py-4">
+          <i class="bi bi-send display-6 d-block mb-2"></i>
+          You haven't sent any pending swap requests.
+        </div>
+      <% } else { %>
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>To</th>
+                <th>You Offered</th>
+                <th>You Requested</th>
+                <th>Message</th>
+                <th>Sent</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <% for (const r of outgoing) { %>
+                <tr>
+                  <td><strong><%= r.target_name %></strong></td>
+                  <td>
+                    <span class="badge bg-primary me-1">Sun</span>
+                    <%= r.requester_date %><br>
+                    <small class="text-muted"><i class="bi bi-geo-alt"></i> <%= r.requester_location %></small>
+                  </td>
+                  <td>
+                    <span class="badge bg-success me-1">Sun</span>
+                    <%= r.target_date %><br>
+                    <small class="text-muted"><i class="bi bi-geo-alt"></i> <%= r.target_location %></small>
+                  </td>
+                  <td>
+                    <% if (r.message) { %>
+                      <span class="text-muted small fst-italic">"<%= r.message %>"</span>
+                    <% } else { %>
+                      <span class="text-muted small">—</span>
+                    <% } %>
+                  </td>
+                  <td><small class="text-muted"><%= new Date(r.created_at).toLocaleDateString('en-US', {month:'short',day:'numeric'}) %></small></td>
+                  <td>
+                    <form method="POST" action="/candidate/swaps/<%= r.id %>/cancel" class="d-inline">
+                      <button type="submit" class="btn btn-outline-secondary btn-sm"
+                        onclick="return confirm('Withdraw this swap request?')">
+                        <i class="bi bi-x-circle"></i> Cancel
+                      </button>
+                    </form>
+                  </td>
+                </tr>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      <% } %>
+    </div>
+  </div>
+
+  <!-- ── History ────────────────────────────────────── -->
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-header d-flex align-items-center gap-2" style="background:var(--mp-navy);color:#fff;">
+      <i class="bi bi-clock-history"></i>
+      <strong>Recent History</strong>
+      <small class="ms-1 opacity-75">(last 20)</small>
+    </div>
+    <div class="card-body p-0">
+      <% if (history.length === 0) { %>
+        <div class="text-center text-muted py-4">
+          <i class="bi bi-clock display-6 d-block mb-2"></i>
+          No swap history yet.
+        </div>
+      <% } else { %>
+        <div class="table-responsive">
+          <table class="table table-sm align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Status</th>
+                <th>Requester</th>
+                <th>Offered</th>
+                <th>Requested From</th>
+                <th>Requested</th>
+                <th>Resolved</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% for (const r of history) { %>
+                <%
+                  let statusBadge, statusIcon;
+                  if (r.status === 'approved') {
+                    statusBadge = 'bg-success'; statusIcon = 'bi-check-circle-fill';
+                  } else if (r.status === 'declined') {
+                    statusBadge = 'bg-danger'; statusIcon = 'bi-x-circle-fill';
+                  } else {
+                    statusBadge = 'bg-secondary'; statusIcon = 'bi-slash-circle-fill';
+                  }
+                %>
+                <tr>
+                  <td>
+                    <span class="badge <%= statusBadge %>">
+                      <i class="bi <%= statusIcon %> me-1"></i>
+                      <%= r.status.charAt(0).toUpperCase() + r.status.slice(1) %>
+                    </span>
+                  </td>
+                  <td><small><%= r.requester_name %></small></td>
+                  <td>
+                    <small><%= r.requester_date %></small><br>
+                    <small class="text-muted"><%= r.requester_location %></small>
+                  </td>
+                  <td><small><%= r.target_name %></small></td>
+                  <td>
+                    <small><%= r.target_date %></small><br>
+                    <small class="text-muted"><%= r.target_location %></small>
+                  </td>
+                  <td>
+                    <small class="text-muted">
+                      <%= r.resolved_at ? new Date(r.resolved_at).toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'}) : '—' %>
+                    </small>
+                  </td>
+                </tr>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      <% } %>
+    </div>
+  </div>
+
+  <div class="mb-3">
+    <a href="/candidate/schedule" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-calendar-check"></i> Back to Schedule
+    </a>
+  </div>
+</div>
+
+<%- include('../partials/footer') %>
