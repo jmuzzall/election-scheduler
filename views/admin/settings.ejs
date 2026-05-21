@@ -52,6 +52,29 @@
               <i class="bi bi-check-lg"></i> Save Settings
             </button>
           </form>
+
+          <% if (settings.input_deadline) { %>
+            <hr class="my-3">
+            <div class="d-flex align-items-center gap-3 flex-wrap">
+              <div>
+                <p class="mb-1 fw-semibold"><i class="bi bi-bell"></i> Automated Reminders</p>
+                <p class="mb-0 text-muted small">
+                  Reminders are sent automatically at <strong>48 hours</strong> and
+                  <strong>24 hours</strong> before the deadline to candidates who have not
+                  submitted. Use the button to send an immediate reminder now.
+                </p>
+              </div>
+              <button class="btn btn-outline-warning btn-sm text-nowrap" id="sendRemindersBtn" onclick="sendRemindersNow()">
+                <i class="bi bi-bell-fill"></i> Send Reminder Now
+              </button>
+            </div>
+            <div id="reminderResult" class="mt-2"></div>
+          <% } else { %>
+            <p class="text-muted small mt-3 mb-0">
+              <i class="bi bi-info-circle"></i>
+              Set an input deadline above to enable automated reminder emails.
+            </p>
+          <% } %>
         </div>
       </div>
     </div>
@@ -176,5 +199,36 @@
     </div>
   </div>
 </div>
+
+<script>
+async function sendRemindersNow() {
+  const btn = document.getElementById('sendRemindersBtn');
+  const result = document.getElementById('reminderResult');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Sending…';
+  result.innerHTML = '';
+
+  try {
+    const res  = await fetch('/api/send-reminders', { method: 'POST' });
+    const data = await res.json();
+    if (data.success) {
+      result.innerHTML = `
+        <div class="alert alert-success py-2 mb-0">
+          <i class="bi bi-check-circle-fill me-1"></i>
+          Reminders sent to <strong>${data.sent}</strong> candidate(s).
+          ${data.skipped > 0 ? `(${data.skipped} failed — check server logs)` : ''}
+          ${data.total === 0 ? '<br><small class="text-muted">All candidates have already submitted.</small>' : ''}
+        </div>`;
+    } else {
+      result.innerHTML = `<div class="alert alert-danger py-2 mb-0"><i class="bi bi-exclamation-triangle-fill me-1"></i>${data.error}</div>`;
+    }
+  } catch (err) {
+    result.innerHTML = `<div class="alert alert-danger py-2 mb-0">Request failed: ${err.message}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-bell-fill"></i> Send Reminder Now';
+  }
+}
+</script>
 
 <%- include('../partials/footer') %>

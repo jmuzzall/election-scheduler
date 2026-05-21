@@ -121,6 +121,18 @@ async function initialize() {
   `);
 
   db.run(`
+    CREATE TABLE IF NOT EXISTS reminder_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      candidate_id INTEGER NOT NULL,
+      deadline TEXT NOT NULL,
+      reminder_type TEXT NOT NULL,
+      sent_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(candidate_id, deadline, reminder_type),
+      FOREIGN KEY (candidate_id) REFERENCES candidates(id) ON DELETE CASCADE
+    )
+  `);
+
+  db.run(`
     CREATE TABLE IF NOT EXISTS swap_requests (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       requester_id INTEGER NOT NULL,

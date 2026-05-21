@@ -225,4 +225,70 @@ async function sendSwapResolved(requesterEmail, requesterName, targetName, appro
   });
 }
 
-module.exports = { sendMagicLink, sendPasswordReset, sendSwapRequest, sendSwapResolved };
+/**
+ * Send an availability reminder to a candidate who hasn't submitted blackout dates.
+ * reminderType: '48h' or '24h'
+ */
+async function sendAvailabilityReminder(email, name, deadlineFormatted, reminderType) {
+  const appUrl = process.env.APP_URL || 'http://localhost:3000';
+  const link = `${appUrl}/candidate/login`;
+  const transport = getTransporter();
+
+  const timeLabel = reminderType === '24h' ? '24 hours' : '48 hours';
+  const urgency   = reminderType === '24h' ? 'FINAL REMINDER: ' : '';
+
+  await transport.sendMail({
+    from: `"Sunday Duty Scheduler" <${process.env.SMTP_USER || 'noreply@localhost'}>`,
+    to: email,
+    subject: `${urgency}Please Submit Your Blackout Dates — ${timeLabel} Remaining`,
+    text: [
+      `Dear ${name},`,
+      '',
+      `You have not yet entered your blackout dates for Sunday duty deacon service.`,
+      '',
+      `Please do so before the deadline of ${deadlineFormatted}, before the window closes (approximately ${timeLabel} from now).`,
+      '',
+      `If you do not have any blackout dates, please log in and confirm your availability ` +
+      `anyway — otherwise we will assume you are available for all Sundays in the scheduling period.`,
+      '',
+      `Log in here: ${link}`,
+      '',
+      'Thank you for your service.',
+      '',
+      '— Sunday Duty Scheduler'
+    ].join('\n'),
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+        <div style="background:#1B3A5C;padding:20px 24px;border-radius:6px 6px 0 0;">
+          <h2 style="color:#fff;margin:0;font-size:20px;">
+            ${urgency}Blackout Date Submission Reminder
+          </h2>
+        </div>
+        <div style="padding:24px;border:1px solid #dee2e6;border-top:none;border-radius:0 0 6px 6px;">
+          <p>Dear <strong>${name}</strong>,</p>
+          <p>You have not yet entered your blackout dates for Sunday duty deacon service.</p>
+          <div style="background:#fff8e1;border-left:4px solid #C5963A;padding:14px 18px;margin:20px 0;border-radius:0 6px 6px 0;">
+            <strong>Deadline:</strong> ${deadlineFormatted}<br>
+            <strong>Time remaining:</strong> approximately ${timeLabel}
+          </div>
+          <p>
+            If you do not have any blackout dates, please log in and confirm your availability
+            anyway — otherwise we will assume you are available for <em>all</em> Sundays in
+            the scheduling period.
+          </p>
+          <p style="margin:28px 0;">
+            <a href="${link}"
+               style="background:#1B3A5C;color:#fff;padding:12px 28px;text-decoration:none;border-radius:6px;font-weight:bold;display:inline-block;">
+              Log In &amp; Submit Availability
+            </a>
+          </p>
+          <p style="color:#7f8c8d;font-size:13px;">
+            Thank you for your service to McLean Presbyterian Church.
+          </p>
+        </div>
+      </div>
+    `
+  });
+}
+
+module.exports = { sendMagicLink, sendPasswordReset, sendSwapRequest, sendSwapResolved, sendAvailabilityReminder };

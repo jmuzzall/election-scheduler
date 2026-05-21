@@ -5,6 +5,7 @@ const db = require('../db');
 const { requireAdmin } = require('../middleware/auth');
 const { generateSchedule } = require('../services/scheduler');
 const mailer = require('../services/mailer');
+const { sendManualReminders } = require('../services/reminderScheduler');
 
 // ─── Generate Schedule ─────────────────────────────
 router.post('/generate-schedule', requireAdmin, (req, res) => {
@@ -302,6 +303,16 @@ router.get('/export-blackouts', requireAdmin, async (req, res) => {
 
   await workbook.xlsx.write(res);
   res.end();
+});
+
+// ─── Send Availability Reminders (manual trigger) ──
+router.post('/send-reminders', requireAdmin, async (req, res) => {
+  try {
+    const result = await sendManualReminders();
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
 });
 
 module.exports = router;
