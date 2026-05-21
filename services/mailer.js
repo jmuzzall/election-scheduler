@@ -234,28 +234,35 @@ async function sendAvailabilityReminder(email, name, deadlineFormatted, reminder
   const link = `${appUrl}/candidate/login`;
   const transport = getTransporter();
 
-  const timeLabel = reminderType === '24h' ? '24 hours' : '48 hours';
-  const urgency   = reminderType === '24h' ? 'FINAL REMINDER: ' : '';
+  const isFinal  = reminderType === '24h';
+  const isManual = reminderType === 'manual';
+  const urgency  = isFinal ? 'Final Reminder: ' : '';
+  const timeNote = isFinal   ? ' (approximately 24 hours from now)'
+                 : isManual  ? ''
+                 :             ' (approximately 48 hours from now)';
+  const subject  = isFinal
+    ? `Final Reminder — Please Submit Your Blackout Dates Before the Window Closes`
+    : `Reminder — Please Submit Your Blackout Dates for Deacon Duty Scheduling`;
 
   await transport.sendMail({
     from: `"Sunday Duty Scheduler" <${process.env.SMTP_USER || 'noreply@localhost'}>`,
     to: email,
-    subject: `${urgency}Please Submit Your Blackout Dates — ${timeLabel} Remaining`,
+    subject,
     text: [
       `Dear ${name},`,
       '',
-      `You have not yet entered your blackout dates for Sunday duty deacon service.`,
+      `You have not yet put in your blackout dates for duty deacon service.`,
       '',
-      `Please do so before the deadline of ${deadlineFormatted}, before the window closes (approximately ${timeLabel} from now).`,
+      `Please do so before the deadline of ${deadlineFormatted}${timeNote}, before the window closes.`,
       '',
-      `If you do not have any blackout dates, please log in and confirm your availability ` +
-      `anyway — otherwise we will assume you are available for all Sundays in the scheduling period.`,
+      `If you do not have any blackout dates, please respond in the software or we will assume ` +
+      `you are available for all Sundays in the scheduling period.`,
       '',
       `Log in here: ${link}`,
       '',
       'Thank you for your service.',
       '',
-      '— Sunday Duty Scheduler'
+      '— Sunday Duty Deacon Rotation Scheduler'
     ].join('\n'),
     html: `
       <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
@@ -266,14 +273,13 @@ async function sendAvailabilityReminder(email, name, deadlineFormatted, reminder
         </div>
         <div style="padding:24px;border:1px solid #dee2e6;border-top:none;border-radius:0 0 6px 6px;">
           <p>Dear <strong>${name}</strong>,</p>
-          <p>You have not yet entered your blackout dates for Sunday duty deacon service.</p>
+          <p>You have not yet put in your blackout dates for duty deacon service.</p>
           <div style="background:#fff8e1;border-left:4px solid #C5963A;padding:14px 18px;margin:20px 0;border-radius:0 6px 6px 0;">
-            <strong>Deadline:</strong> ${deadlineFormatted}<br>
-            <strong>Time remaining:</strong> approximately ${timeLabel}
+            <strong>Submission deadline:</strong> ${deadlineFormatted}${timeNote ? `<br><em style="font-size:13px;">${timeNote.trim()}</em>` : ''}
           </div>
           <p>
-            If you do not have any blackout dates, please log in and confirm your availability
-            anyway — otherwise we will assume you are available for <em>all</em> Sundays in
+            If you do not have any blackout dates, please log in to the portal and indicate
+            this — otherwise we will assume you are available for <em>all</em> Sundays in
             the scheduling period.
           </p>
           <p style="margin:28px 0;">
