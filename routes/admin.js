@@ -51,9 +51,30 @@ router.get('/dashboard', requireAdmin, (req, res) => {
   const locationCount = db.queryOne('SELECT COUNT(*) as count FROM locations').count;
   const assignmentCount = db.queryOne('SELECT COUNT(*) as count FROM assignments').count;
 
+  // Per-candidate assignment breakdown for schedule summary
+  const scheduleByCandidate = db.queryAll(`
+    SELECT c.id, c.name,
+           COUNT(a.id) AS shift_count
+    FROM candidates c
+    LEFT JOIN assignments a ON c.id = a.candidate_id
+    GROUP BY c.id, c.name
+    ORDER BY c.name
+  `);
+
+  // All assignments for the date-sorted schedule table
+  const allAssignments = db.queryAll(`
+    SELECT a.date, c.name AS candidate_name, l.name AS location_name
+    FROM assignments a
+    JOIN candidates c ON a.candidate_id = c.id
+    JOIN locations l  ON a.location_id  = l.id
+    ORDER BY a.date, l.name, c.name
+  `);
+
   res.render('admin/dashboard', {
     settings,
-    stats: { candidateCount, submittedCount, locationCount, assignmentCount }
+    stats: { candidateCount, submittedCount, locationCount, assignmentCount },
+    scheduleByCandidate,
+    allAssignments
   });
 });
 

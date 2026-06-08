@@ -137,11 +137,21 @@ router.get('/portal', requireCandidate, (req, res) => {
   const deadline = settings.input_deadline ? new Date(settings.input_deadline) : null;
   const isLocked = deadline ? now > deadline : false;
 
+  // Fetch this candidate's assigned dates (if schedule has been generated)
+  const myAssignments = db.queryAll(`
+    SELECT a.date, l.name AS location_name
+    FROM assignments a
+    JOIN locations l ON a.location_id = l.id
+    WHERE a.candidate_id = ?
+    ORDER BY a.date
+  `, [candidate.id]);
+
   res.render('candidate/portal', {
     candidate,
     settings,
     blackoutDates,
     isLocked,
+    myAssignments,
     pendingSwapCount: getPendingSwapCount(candidate.id)
   });
 });
