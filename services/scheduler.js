@@ -134,12 +134,16 @@ function generateSchedule() {
 
   // ── Utilization sort ───────────────────────────────────────────────────────
   // Lower ratio → person has more "room" relative to their capacity → higher priority.
-  // Tiny random jitter breaks exact ties without bias toward any fixed ordering.
+  // Tiebreaker 1: fewest effective available dates (most constrained candidate goes first
+  //   so they are not squeezed out by less-constrained peers with equal utilization).
+  // Tiebreaker 2: candidate ID (deterministic, avoids random re-ordering across runs).
   function byUtilization(list) {
     return [...list].sort((a, b) => {
       const ra = shiftCounts[a.id] / (effectiveCap[a.id] || 1);
       const rb = shiftCounts[b.id] / (effectiveCap[b.id] || 1);
-      return (ra - rb) || (Math.random() - 0.5) * 1e-9;
+      return (ra - rb)
+          || (effectiveCap[a.id] - effectiveCap[b.id])   // most constrained first
+          || (a.id - b.id);                               // deterministic tiebreaker
     });
   }
 
