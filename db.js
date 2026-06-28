@@ -121,6 +121,17 @@ async function initialize() {
   `);
 
   db.run(`
+    CREATE TABLE IF NOT EXISTS admin_invite_tokens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      admin_id INTEGER NOT NULL,
+      token TEXT UNIQUE NOT NULL,
+      expires_at TEXT NOT NULL,
+      used INTEGER DEFAULT 0,
+      FOREIGN KEY (admin_id) REFERENCES admins(id) ON DELETE CASCADE
+    )
+  `);
+
+  db.run(`
     CREATE TABLE IF NOT EXISTS reminder_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       candidate_id INTEGER NOT NULL,

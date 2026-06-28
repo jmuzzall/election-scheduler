@@ -297,4 +297,60 @@ async function sendAvailabilityReminder(email, name, deadlineFormatted, reminder
   });
 }
 
-module.exports = { sendMagicLink, sendPasswordReset, sendSwapRequest, sendSwapResolved, sendAvailabilityReminder };
+/**
+ * Invite a new admin to set up their account via a one-time link.
+ */
+async function sendAdminInvite(email, name, inviterName, token) {
+  const appUrl = process.env.APP_URL || 'http://localhost:3000';
+  const link = `${appUrl}/admin/accept-invite?token=${token}`;
+  const transport = getTransporter();
+
+  await transport.sendMail({
+    from: `"Sunday Duty Scheduler" <${process.env.SMTP_USER || 'noreply@localhost'}>`,
+    to: email,
+    subject: `You've been invited to administer the Sunday Duty Deacon Rotation Scheduler`,
+    text: [
+      `Hello ${name},`,
+      '',
+      `${inviterName} has invited you to be an administrator of the Sunday Duty Deacon Rotation Scheduler for McLean Presbyterian Church.`,
+      '',
+      `Click the link below to accept the invitation and set up your password:`,
+      link,
+      '',
+      `This invitation link expires in 48 hours and can only be used once.`,
+      '',
+      `If you did not expect this invitation, please ignore this email.`,
+      '',
+      '— Sunday Duty Deacon Rotation Scheduler'
+    ].join('\n'),
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+        <div style="background:#1B3A5C;padding:20px 24px;border-radius:6px 6px 0 0;">
+          <h2 style="color:#fff;margin:0;font-size:20px;">Admin Invitation</h2>
+        </div>
+        <div style="padding:24px;border:1px solid #dee2e6;border-top:none;border-radius:0 0 6px 6px;">
+          <p>Hello <strong>${name}</strong>,</p>
+          <p>
+            <strong>${inviterName}</strong> has invited you to be an administrator of the
+            <strong>Sunday Duty Deacon Rotation Scheduler</strong> for McLean Presbyterian Church.
+          </p>
+          <p>Click the button below to accept the invitation and choose your password:</p>
+          <p style="margin:28px 0;">
+            <a href="${link}"
+               style="background:#1B3A5C;color:#fff;padding:12px 28px;text-decoration:none;border-radius:6px;font-weight:bold;display:inline-block;">
+              Accept Invitation &amp; Set Password
+            </a>
+          </p>
+          <p style="color:#7f8c8d;font-size:13px;">
+            This link expires in 48 hours and can only be used once.<br>
+            If you did not expect this invitation, you can safely ignore this email.
+          </p>
+        </div>
+      </div>
+    `
+  });
+
+  return link;
+}
+
+module.exports = { sendMagicLink, sendPasswordReset, sendSwapRequest, sendSwapResolved, sendAvailabilityReminder, sendAdminInvite };

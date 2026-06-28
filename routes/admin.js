@@ -1,11 +1,13 @@
 const express = require('express');
 const router = express.Router();
 const bcryptjs = require('bcryptjs');
+const crypto = require('crypto');
 const multer = require('multer');
 const { parse } = require('csv-parse/sync');
 const path = require('path');
 const db = require('../db');
 const { requireAdmin } = require('../middleware/auth');
+const mailer = require('../services/mailer');
 
 // Multer config for CSV uploads
 const upload = multer({
@@ -145,6 +147,100 @@ router.post('/admins/add', requireAdmin, (req, res) => {
       res.redirect('/admin/settings?error=' + encodeURIComponent(err.message));
     }
   }
+});
+
+// ─── Invite Admin by Email ──────────────────────────
+router.post('/admins/invite', requireAdmin, async (req, res) => {
+  const { name, email } = req.body;
+  if (!name || !email) {
+    return res.redirect('/admin/settings?error=' + encodeURIComponent('Name and email are required.'));
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+
+  // Create or reuse the admin record (password_hash left null until they accept)
+  try {
+    let admin = db.queryOne('SELECT * FROM admins WHERE email = ?', [normalizedEmail]);
+    if (admin && admin.password_hash) {
+      return res.redirect('/admin/settings?error=' + encodeURIComponent(
+        `${normalizedEmail} is already an active admin. Use "Add Admin" if you want to set a password directly.`
+      ));
+    }
+    if (!admin) {
+      db.run('INSERT INTO admins (name, email, password_hash, is_super) VALUES (?, ?, NULL, 0)',
+        [name.trim(), normalizedEmail]);
+      admin = db.queryOne('SELECT * FROM admins WHERE email = ?', [normalizedEmail]);
+    }
+
+    // Generate 48-hour invite token
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
+    db.run(
+      'INSERT INTO admin_invite_tokens (admin_id, token, expires_at) VALUES (?, ?, ?)',
+      [admin.id, token, expiresAt]
+    );
+
+    // Send the invite email
+    const inviteLink = await mailer.sendAdminInvite(
+      normalizedEmail, name.trim(), req.session.admin.name, token
+    );
+
+    // In dev mode mailer returns the link — show it so it's not lost
+    const devNote = process.env.SMTP_HOST ? '' :
+      ` (SMTP not configured — link logged to server console: ${inviteLink})`;
+
+    res.redirect('/admin/settings?success=' + encodeURIComponent(
+      `Invitation sent to ${normalizedEmail}.${devNote} The link expires in 48 hours.`
+    ));
+  } catch (err) {
+    res.redirect('/admin/settings?error=' + encodeURIComponent(err.message));
+  }
+});
+
+// ─── Accept Admin Invite ────────────────────────────
+router.get('/accept-invite', (req, res) => {
+  const { token } = req.query;
+  if (!token) return res.render('admin/accept-invite', { error: 'No invite token provided.', token: null, name: null });
+
+  const row = db.queryOne(
+    `SELECT t.*, a.name, a.email
+     FROM admin_invite_tokens t
+     JOIN admins a ON t.admin_id = a.id
+     WHERE t.token = ?`, [token]
+  );
+
+  if (!row) return res.render('admin/accept-invite', { error: 'This invite link is invalid or has already been used.', token: null, name: null });
+  if (row.used) return res.render('admin/accept-invite', { error: 'This invite link has already been used.', token: null, name: null });
+  if (new Date(row.expires_at) < new Date()) return res.render('admin/accept-invite', { error: 'This invite link has expired. Ask the administrator to send a new one.', token: null, name: null });
+
+  res.render('admin/accept-invite', { error: null, token, name: row.name, email: row.email });
+});
+
+router.post('/accept-invite', (req, res) => {
+  const { token, password, confirm_password } = req.body;
+  if (!token) return res.redirect('/admin/login');
+
+  const row = db.queryOne(
+    `SELECT t.*, a.name, a.email, a.id as admin_id
+     FROM admin_invite_tokens t
+     JOIN admins a ON t.admin_id = a.id
+     WHERE t.token = ?`, [token]
+  );
+
+  const fail = (msg) => res.render('admin/accept-invite', { error: msg, token, name: row ? row.name : null, email: row ? row.email : null });
+
+  if (!row || row.used) return fail('This invite link is no longer valid.');
+  if (new Date(row.expires_at) < new Date()) return fail('This invite link has expired.');
+  if (!password || password.length < 6) return fail('Password must be at least 6 characters.');
+  if (password !== confirm_password) return fail('Passwords do not match.');
+
+  const hash = bcryptjs.hashSync(password, 10);
+  db.run('UPDATE admins SET password_hash = ? WHERE id = ?', [hash, row.admin_id]);
+  db.run('UPDATE admin_invite_tokens SET used = 1 WHERE id = ?', [row.id]);
+
+  // Log them in immediately
+  req.session.admin = { id: row.admin_id, email: row.email, name: row.name, is_super: 0 };
+  res.redirect('/admin/dashboard');
 });
 
 router.post('/admins/:id/delete', requireAdmin, (req, res) => {
