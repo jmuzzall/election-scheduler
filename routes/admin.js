@@ -296,17 +296,45 @@ router.post('/candidates/upload', requireAdmin, upload.single('csv'), (req, res)
     const records = parse(content, {
       columns: true,
       skip_empty_lines: true,
-      trim: true
+      trim: true,
+      bom: true           // strip Excel BOM characters automatically
     });
+
+    if (records.length === 0) {
+      return res.redirect('/admin/candidates?error=' + encodeURIComponent(
+        'The CSV file appears to be empty or has no data rows.'
+      ));
+    }
+
+    // Build a case-insensitive column lookup from the actual headers
+    const headers = Object.keys(records[0]);
+    function col(row, ...candidates) {
+      for (const c of candidates) {
+        const match = headers.find(h => h.toLowerCase() === c.toLowerCase());
+        if (match && row[match]) return row[match];
+      }
+      return '';
+    }
+
+    // Detect which name/email columns are present (for the error message)
+    const hasName  = headers.some(h => ['name','full name','fullname','first name'].includes(h.toLowerCase()));
+    const hasEmail = headers.some(h => ['email','email address','e-mail'].includes(h.toLowerCase()));
+
+    if (!hasName || !hasEmail) {
+      return res.redirect('/admin/candidates?error=' + encodeURIComponent(
+        `CSV is missing required columns. Found: [${headers.join(', ')}]. ` +
+        `Need a column called "Name" (or "Full Name") and one called "Email" (or "Email Address").`
+      ));
+    }
 
     let added = 0;
     let skipped = 0;
 
     db.transaction(() => {
       for (const row of records) {
-        const name = row['Name'] || row['name'] || '';
-        const email = row['Email'] || row['email'] || '';
-        const maxShifts = parseInt(row['Max Shifts'] || row['max_shifts'] || '4') || 4;
+        const name      = col(row, 'Name', 'Full Name', 'FullName', 'First Name');
+        const email     = col(row, 'Email', 'Email Address', 'E-mail');
+        const maxShifts = parseInt(col(row, 'Max Shifts', 'max_shifts', 'MaxShifts') || '26') || 26;
 
         if (!name || !email) { skipped++; continue; }
 
@@ -320,9 +348,14 @@ router.post('/candidates/upload', requireAdmin, upload.single('csv'), (req, res)
       }
     });
 
-    res.redirect(`/admin/candidates?success=${added} candidates imported, ${skipped} skipped.`);
+    res.redirect('/admin/candidates?success=' + encodeURIComponent(
+      `${added} deacon(s) imported successfully, ${skipped} skipped (duplicate or missing data).`
+    ));
   } catch (err) {
-    res.redirect('/admin/candidates?error=CSV parse error: ' + encodeURIComponent(err.message));
+    res.redirect('/admin/candidates?error=' + encodeURIComponent(
+      'CSV parse error: ' + err.message +
+      ' — Make sure the file is saved as CSV (not .xlsx) and has Name and Email columns.'
+    ));
   }
 });
 
