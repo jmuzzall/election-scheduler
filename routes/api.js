@@ -5,6 +5,7 @@ const db = require('../db');
 const { requireAdmin } = require('../middleware/auth');
 const { generateSchedule } = require('../services/scheduler');
 const mailer = require('../services/mailer');
+const { sendManualReminders } = require('../services/reminderScheduler');
 
 // ─── Generate Schedule ─────────────────────────────
 router.post('/generate-schedule', requireAdmin, (req, res) => {
@@ -200,6 +201,118 @@ router.get('/export-schedule', requireAdmin, async (req, res) => {
 
   await workbook.xlsx.write(res);
   res.end();
+});
+
+// ─── Export Blackout Dates to Excel ───────────────
+router.get('/export-blackouts', requireAdmin, async (req, res) => {
+  const ExcelJS = require('exceljs');
+
+  // Fetch every blackout date with the candidate's name, sorted by date then name
+  const rows = db.queryAll(`
+    SELECT b.date, c.name AS candidate_name
+    FROM blackout_dates b
+    JOIN candidates c ON b.candidate_id = c.id
+    ORDER BY b.date ASC, c.name ASC
+  `);
+
+  // Group candidates under each date
+  const byDate = {};
+  for (const row of rows) {
+    if (!byDate[row.date]) byDate[row.date] = [];
+    byDate[row.date].push(row.candidate_name);
+  }
+
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'Election Scheduler';
+
+  // ── Sheet 1: By Date (one row per date) ─────────
+  const byDateSheet = workbook.addWorksheet('By Date');
+
+  const hdr1 = byDateSheet.addRow(['Date', 'Day', '# Unavailable', 'Candidates Unavailable']);
+  hdr1.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1A5276' } };
+  hdr1.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 12 };
+  hdr1.alignment = { horizontal: 'center', vertical: 'middle' };
+  byDateSheet.getColumn(1).width = 14;
+  byDateSheet.getColumn(2).width = 12;
+  byDateSheet.getColumn(3).width = 16;
+  byDateSheet.getColumn(4).width = 60;
+
+  const sortedDates = Object.keys(byDate).sort();
+  sortedDates.forEach((date, idx) => {
+    const names = byDate[date];
+    const dayName = new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long' });
+    const row = byDateSheet.addRow([date, dayName, names.length, names.join(', ')]);
+    row.alignment = { vertical: 'top', wrapText: true };
+    if (idx % 2 === 0) {
+      row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8F4FD' } };
+    }
+    row.eachCell(cell => {
+      cell.border = {
+        top: { style: 'thin' }, left: { style: 'thin' },
+        bottom: { style: 'thin' }, right: { style: 'thin' }
+      };
+    });
+  });
+
+  // ── Sheet 2: By Candidate (one row per candidate) ─
+  const byCandSheet = workbook.addWorksheet('By Candidate');
+
+  const candidates = db.queryAll('SELECT id, name FROM candidates ORDER BY name');
+  const hdr2 = byCandSheet.addRow(['Candidate', '# Blackout Dates', 'Blackout Dates']);
+  hdr2.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1A5276' } };
+  hdr2.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 12 };
+  hdr2.alignment = { horizontal: 'center', vertical: 'middle' };
+  byCandSheet.getColumn(1).width = 28;
+  byCandSheet.getColumn(2).width = 18;
+  byCandSheet.getColumn(3).width = 70;
+
+  const blackoutsByCandidate = db.queryAll(`
+    SELECT c.name AS candidate_name, GROUP_CONCAT(b.date, ', ') AS dates, COUNT(*) AS cnt
+    FROM blackout_dates b
+    JOIN candidates c ON b.candidate_id = c.id
+    GROUP BY b.candidate_id
+    ORDER BY c.name ASC
+  `);
+
+  // Also include candidates with zero blackout dates
+  const candidatesWithBlackouts = new Set(blackoutsByCandidate.map(r => r.candidate_name));
+  const allCandidateRows = [
+    ...blackoutsByCandidate,
+    ...candidates
+      .filter(c => !candidatesWithBlackouts.has(c.name))
+      .map(c => ({ candidate_name: c.name, cnt: 0, dates: '(none)' }))
+  ].sort((a, b) => a.candidate_name.localeCompare(b.candidate_name));
+
+  allCandidateRows.forEach((r, idx) => {
+    const row = byCandSheet.addRow([r.candidate_name, r.cnt, r.dates]);
+    row.alignment = { vertical: 'top', wrapText: true };
+    if (idx % 2 === 0) {
+      row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8F4FD' } };
+    }
+    row.eachCell(cell => {
+      cell.border = {
+        top: { style: 'thin' }, left: { style: 'thin' },
+        bottom: { style: 'thin' }, right: { style: 'thin' }
+      };
+    });
+  });
+
+  const today = new Date().toISOString().split('T')[0];
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="blackout-dates-${today}.xlsx"`);
+
+  await workbook.xlsx.write(res);
+  res.end();
+});
+
+// ─── Send Availability Reminders (manual trigger) ──
+router.post('/send-reminders', requireAdmin, async (req, res) => {
+  try {
+    const result = await sendManualReminders();
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
 });
 
 module.exports = router;

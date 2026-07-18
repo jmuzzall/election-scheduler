@@ -138,9 +138,17 @@ async function generateSchedule() {
     const resp = await fetch('/api/generate-schedule', { method: 'POST' });
     const data = await resp.json();
     if (data.success) {
-      result.innerHTML = '<div class="alert alert-success">Schedule generated: ' +
-        data.totalAssignments + ' assignments across ' + data.sundays + ' Sundays and ' +
-        data.locations + ' locations.</div>';
+      const b = data.balanceStats;
+      const unfilledNote = data.unfilledSlots > 0
+        ? '<br><strong class="text-warning">⚠ ' + data.unfilledSlots + ' slot(s) could not be filled — all candidates are blacked out on those dates.</strong>'
+        : '';
+      const balanceNote = b
+        ? '<br><small class="text-muted">Balance — min: ' + b.min + ' shifts, max: ' + b.max + ' shifts, avg: ' + b.avg + ', std dev: ' + b.stdDev + ' &nbsp;|&nbsp; ' + data.swapsDone + ' balance swap(s) applied.</small>'
+        : '';
+      result.innerHTML = '<div class="alert alert-success">' +
+        '✓ Schedule generated: <strong>' + data.totalAssignments + '</strong> assignments across ' +
+        '<strong>' + data.sundays + '</strong> Sundays and <strong>' + data.locations + '</strong> locations.' +
+        balanceNote + unfilledNote + '</div>';
       setTimeout(() => location.reload(), 1500);
     } else {
       result.innerHTML = '<div class="alert alert-danger">' + data.error + '</div>';

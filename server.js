@@ -60,6 +60,8 @@ db.initialize().then(() => {
   app.listen(PORT, () => {
     console.log(`Election Scheduler running at http://localhost:${PORT}`);
   });
+  // Start the automated availability reminder scheduler
+  require('./services/reminderScheduler').start();
 }).catch(err => {
   console.error('Failed to initialize database:', err);
   process.exit(1);

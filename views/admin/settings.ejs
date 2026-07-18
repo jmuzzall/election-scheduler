@@ -19,8 +19,9 @@
   <% } %>
 
   <div class="row g-4">
-    <!-- Schedule Date Range -->
-    <div class="col-md-8">
+
+    <!-- ── Schedule Configuration ───────────────── -->
+    <div class="col-12">
       <div class="card border-0 shadow-sm">
         <div class="card-header bg-white fw-bold">
           <i class="bi bi-calendar-range"></i> Schedule Configuration
@@ -28,40 +29,134 @@
         <div class="card-body">
           <form method="POST" action="/admin/settings">
             <div class="row g-3">
-              <div class="col-md-6">
+              <div class="col-md-4">
                 <label for="schedule_start_date" class="form-label">Schedule Start Date</label>
                 <input type="date" class="form-control" id="schedule_start_date" name="schedule_start_date"
                   value="<%= settings.schedule_start_date || '' %>">
                 <div class="form-text">First date of the scheduling period</div>
               </div>
-              <div class="col-md-6">
+              <div class="col-md-4">
                 <label for="schedule_end_date" class="form-label">Schedule End Date</label>
                 <input type="date" class="form-control" id="schedule_end_date" name="schedule_end_date"
                   value="<%= settings.schedule_end_date || '' %>">
                 <div class="form-text">Last date of the scheduling period</div>
               </div>
-              <div class="col-md-6">
+              <div class="col-md-4">
                 <label for="input_deadline" class="form-label">Input Deadline</label>
                 <input type="datetime-local" class="form-control" id="input_deadline" name="input_deadline"
                   value="<%= settings.input_deadline ? settings.input_deadline.replace(' ', 'T').substring(0, 16) : '' %>">
-                <div class="form-text">Candidates must submit availability before this date/time</div>
+                <div class="form-text">Candidates must submit before this date/time</div>
               </div>
             </div>
             <button type="submit" class="btn btn-primary mt-3">
               <i class="bi bi-check-lg"></i> Save Settings
             </button>
           </form>
+
+          <% if (settings.input_deadline) { %>
+            <hr class="my-3">
+            <div class="d-flex align-items-center gap-3 flex-wrap">
+              <div>
+                <p class="mb-1 fw-semibold"><i class="bi bi-bell"></i> Automated Reminders</p>
+                <p class="mb-0 text-muted small">
+                  Reminders are sent automatically at <strong>48 hours</strong> and
+                  <strong>24 hours</strong> before the deadline to candidates who have not
+                  submitted. Use the button to send an immediate reminder now.
+                </p>
+              </div>
+              <button class="btn btn-outline-warning btn-sm text-nowrap" id="sendRemindersBtn" onclick="sendRemindersNow()">
+                <i class="bi bi-bell-fill"></i> Send Reminder Now
+              </button>
+            </div>
+            <div id="reminderResult" class="mt-2"></div>
+          <% } else { %>
+            <p class="text-muted small mt-3 mb-0">
+              <i class="bi bi-info-circle"></i>
+              Set an input deadline above to enable automated reminder emails.
+            </p>
+          <% } %>
         </div>
       </div>
     </div>
 
-    <!-- Change Password -->
-    <div class="col-md-4">
+    <!-- ── Admin Users ───────────────────────────── -->
+    <div class="col-lg-7">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white fw-bold d-flex justify-content-between align-items-center">
+          <span><i class="bi bi-shield-lock"></i> Admin Users</span>
+          <div class="d-flex gap-2">
+            <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#inviteAdminModal">
+              <i class="bi bi-envelope-plus"></i> Invite by Email
+            </button>
+            <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addAdminModal">
+              <i class="bi bi-plus-lg"></i> Add Admin
+            </button>
+          </div>
+        </div>
+        <div class="card-body p-0">
+          <table class="table table-hover mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th class="text-center">Role</th>
+                <th class="text-end">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% for (const a of admins) { %>
+                <tr class="<%= !a.password_hash ? 'table-warning' : '' %>">
+                  <td>
+                    <%= a.name %>
+                    <% if (a.id === admin.id) { %>
+                      <span class="badge bg-secondary ms-1">You</span>
+                    <% } %>
+                  </td>
+                  <td class="text-muted small"><%= a.email %></td>
+                  <td class="text-center">
+                    <% if (a.is_super) { %>
+                      <span class="badge bg-danger">Super Admin</span>
+                    <% } else if (!a.password_hash) { %>
+                      <span class="badge bg-warning text-dark">Invited</span>
+                    <% } else { %>
+                      <span class="badge bg-primary">Admin</span>
+                    <% } %>
+                  </td>
+                  <td class="text-end">
+                    <% if (!a.is_super && a.id !== admin.id) { %>
+                      <% if (!a.password_hash) { %>
+                        <button class="btn btn-sm btn-outline-warning me-1"
+                          onclick="resendInvite('<%= a.name %>','<%= a.email %>')"
+                          title="Resend invitation email">
+                          <i class="bi bi-envelope-arrow-up"></i>
+                        </button>
+                      <% } %>
+                      <form method="POST" action="/admin/admins/<%= a.id %>/delete" class="d-inline"
+                        onsubmit="return confirm('Remove admin access for <%= a.name %>?')">
+                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Remove">
+                          <i class="bi bi-trash"></i>
+                        </button>
+                      </form>
+                    <% } else { %>
+                      <span class="text-muted small">—</span>
+                    <% } %>
+                  </td>
+                </tr>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Change My Password ───────────────────── -->
+    <div class="col-lg-5">
       <div class="card border-0 shadow-sm">
         <div class="card-header bg-white fw-bold">
-          <i class="bi bi-key"></i> Change Password
+          <i class="bi bi-key"></i> Change My Password
         </div>
         <div class="card-body">
+          <p class="text-muted small">Logged in as <strong><%= admin.email %></strong></p>
           <form method="POST" action="/admin/change-password">
             <div class="mb-3">
               <label for="current_password" class="form-label">Current Password</label>
@@ -69,7 +164,8 @@
             </div>
             <div class="mb-3">
               <label for="new_password" class="form-label">New Password</label>
-              <input type="password" class="form-control" id="new_password" name="new_password" required minlength="6">
+              <input type="password" class="form-control" id="new_password" name="new_password"
+                required minlength="6" placeholder="At least 6 characters">
             </div>
             <button type="submit" class="btn btn-warning w-100">
               <i class="bi bi-key"></i> Change Password
@@ -78,7 +174,117 @@
         </div>
       </div>
     </div>
+
+  </div><!-- /row -->
+</div>
+
+<!-- ── Invite Admin Modal ──────────────────────────── -->
+<div class="modal fade" id="inviteAdminModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="POST" action="/admin/admins/invite">
+        <div class="modal-header" style="background:var(--mp-navy);color:#fff;">
+          <h5 class="modal-title"><i class="bi bi-envelope-plus me-2"></i>Invite Admin by Email</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted small mb-3">
+            An email will be sent with a secure one-time link. The recipient clicks it
+            to choose their own password and activate their account.
+            The link expires in <strong>48 hours</strong>.
+          </p>
+          <div class="mb-3">
+            <label class="form-label">Full Name</label>
+            <input type="text" class="form-control" name="name" placeholder="e.g. Jane Smith" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Email Address</label>
+            <input type="email" class="form-control" name="email" placeholder="jane@example.com" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-send"></i> Send Invitation
+          </button>
+        </div>
+      </form>
+    </div>
   </div>
 </div>
+
+<!-- ── Add Admin Modal ─────────────────────────────── -->
+<div class="modal fade" id="addAdminModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="POST" action="/admin/admins/add">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-shield-plus"></i> Add Admin User</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Full Name</label>
+            <input type="text" class="form-control" name="name" placeholder="e.g. Jane Smith" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Email</label>
+            <input type="email" class="form-control" name="email" placeholder="jane@example.com" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Initial Password</label>
+            <input type="password" class="form-control" name="password"
+              placeholder="At least 6 characters" minlength="6" required>
+            <div class="form-text">Share this with the new admin — they can change it after logging in.</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-plus-lg"></i> Add Admin
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+function resendInvite(name, email) {
+  // Pre-fill the Invite modal and submit
+  document.querySelector('#inviteAdminModal input[name="name"]').value = name;
+  document.querySelector('#inviteAdminModal input[name="email"]').value = email;
+  new bootstrap.Modal(document.getElementById('inviteAdminModal')).show();
+}
+
+async function sendRemindersNow() {
+  const btn = document.getElementById('sendRemindersBtn');
+  const result = document.getElementById('reminderResult');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Sending…';
+  result.innerHTML = '';
+
+  try {
+    const res  = await fetch('/api/send-reminders', { method: 'POST' });
+    const data = await res.json();
+    if (data.success) {
+      result.innerHTML = `
+        <div class="alert alert-success py-2 mb-0">
+          <i class="bi bi-check-circle-fill me-1"></i>
+          Reminders sent to <strong>${data.sent}</strong> candidate(s).
+          ${data.skipped > 0 ? `(${data.skipped} failed — check server logs)` : ''}
+          ${data.total === 0 ? '<br><small class="text-muted">All candidates have already submitted.</small>' : ''}
+        </div>`;
+    } else {
+      result.innerHTML = `<div class="alert alert-danger py-2 mb-0"><i class="bi bi-exclamation-triangle-fill me-1"></i>${data.error}</div>`;
+    }
+  } catch (err) {
+    result.innerHTML = `<div class="alert alert-danger py-2 mb-0">Request failed: ${err.message}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-bell-fill"></i> Send Reminder Now';
+  }
+}
+</script>
 
 <%- include('../partials/footer') %>

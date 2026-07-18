@@ -1,0 +1,64 @@
+<% const dates = Object.keys(scheduleGrid).sort(); %>
+<div class="card border-0 shadow-sm">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-bordered mb-0">
+        <thead class="table-dark">
+          <tr>
+            <th style="min-width:150px;">Date</th>
+            <% for (const loc of locations) { %>
+              <th style="min-width:200px;"><%= loc.name %></th>
+            <% } %>
+          </tr>
+        </thead>
+        <tbody>
+          <% for (const date of dates) { %>
+            <%
+              const d = new Date(date + 'T00:00:00');
+              const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
+              const formatted = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+              const isMine = myDates.includes(date);
+            %>
+            <tr data-date="<%= date %>" class="<%= isMine ? 'my-row' : '' %>">
+              <td class="fw-bold align-middle">
+                <span class="badge <%= isMine ? 'bg-success' : 'bg-primary' %> me-1"><%= dayName %></span>
+                <%= formatted %>
+                <% if (isMine) { %><i class="bi bi-person-fill text-success ms-1" title="You are serving"></i><% } %>
+              </td>
+              <% for (const loc of locations) { %>
+                <td class="align-top">
+                  <% const people = (scheduleGrid[date] && scheduleGrid[date][loc.id]) || []; %>
+                  <% for (const p of people) { %>
+                    <div class="d-flex align-items-center justify-content-between mb-1">
+                      <span class="<%= p.isMe ? 'my-name' : '' %> small">
+                        <% if (p.isMe) { %><i class="bi bi-star-fill text-warning me-1" title="You"></i><% } %>
+                        <%= p.name %>
+                      </span>
+                      <% if (p.isMe && typeof myAssignments !== 'undefined') { %>
+                        <% if (p.hasPendingSwap) { %>
+                          <span class="badge bg-warning text-dark ms-2" style="font-size:0.65rem;">
+                            <i class="bi bi-arrow-left-right"></i> Pending
+                          </span>
+                        <% } else { %>
+                          <button class="btn btn-outline-secondary btn-sm ms-2 py-0 px-1"
+                            style="font-size:0.7rem;"
+                            title="Propose a swap for this date"
+                            onclick="openSwapModal(<%= p.id %>, '<%= date %>', '<%= loc.name.replace(/'/g,"\\'") %>')">
+                            <i class="bi bi-arrow-left-right"></i> Swap
+                          </button>
+                        <% } %>
+                      <% } %>
+                    </div>
+                  <% } %>
+                  <% if (people.length === 0) { %>
+                    <span class="text-muted small fst-italic">—</span>
+                  <% } %>
+                </td>
+              <% } %>
+            </tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>

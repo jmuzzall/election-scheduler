@@ -1,0 +1,179 @@
+<% const title = 'Schedule' %>
+<% const activePage = 'schedule' %>
+<%- include('../partials/header') %>
+<%- include('../partials/candidate-nav') %>
+
+<div class="container-fluid mt-4 px-4">
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h2 class="mb-0"><i class="bi bi-calendar-check"></i> Schedule</h2>
+
+    <% if (hasSchedule && myDates.length > 0) { %>
+      <div class="btn-group" role="group">
+        <button type="button" class="btn btn-success active" id="btnAll" onclick="showAll()">
+          <i class="bi bi-calendar3"></i> All Sundays
+        </button>
+        <button type="button" class="btn btn-outline-success" id="btnMine" onclick="showMine()">
+          <i class="bi bi-person-check"></i> My Sundays (<%= myDates.length %>)
+        </button>
+      </div>
+    <% } %>
+  </div>
+
+  <% if (!hasSchedule) { %>
+    <div class="text-center py-5 text-muted">
+      <i class="bi bi-calendar-x display-1"></i>
+      <p class="mt-3 lead">The schedule hasn't been published yet.</p>
+      <p>Check back after the administrator generates the schedule.</p>
+    </div>
+
+  <% } else if (myDates.length === 0) { %>
+    <div class="alert alert-info shadow-sm border-0">
+      <i class="bi bi-info-circle"></i>
+      The schedule has been generated, but <strong><%= candidate.name %></strong> has no assigned Sundays.
+      Contact the administrator if you believe this is incorrect.
+    </div>
+    <%- include('./schedule-table') %>
+
+  <% } else { %>
+    <div class="alert alert-success shadow-sm border-0 mb-3">
+      <i class="bi bi-person-check-fill"></i>
+      <strong><%= candidate.name %></strong>, you are scheduled for
+      <strong><%= myDates.length %> Sunday<%= myDates.length !== 1 ? 's' : '' %></strong>.
+      Your dates are highlighted. Click <strong><i class="bi bi-arrow-left-right"></i> Swap</strong>
+      on any of your assignments to propose a trade with another deacon.
+    </div>
+    <%- include('./schedule-table') %>
+  <% } %>
+</div>
+
+<!-- ── Swap Proposal Modal ─────────────────────────── -->
+<div class="modal fade" id="swapModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form method="POST" action="/candidate/swaps/propose">
+        <div class="modal-header" style="background:var(--mp-navy);color:#fff;">
+          <h5 class="modal-title"><i class="bi bi-arrow-left-right me-2"></i>Propose a Swap</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+
+          <!-- What you're giving up -->
+          <div class="alert alert-info py-2 mb-3">
+            <strong>You are offering:</strong>
+            <span id="swapOfferLabel" class="ms-2 fw-bold"></span>
+          </div>
+          <input type="hidden" name="my_assignment_id" id="myAssignmentId">
+
+          <!-- Pick which assignment to request in return -->
+          <label class="form-label fw-bold">Select an assignment to trade for:</label>
+          <div class="mb-3" style="max-height:320px;overflow-y:auto;border:1px solid #dee2e6;border-radius:8px;">
+            <table class="table table-hover table-sm mb-0">
+              <thead class="table-light sticky-top">
+                <tr>
+                  <th style="width:32px;"></th>
+                  <th>Date</th>
+                  <th>Location</th>
+                  <th>Deacon</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="swapTargetList">
+                <% for (const a of otherAssignments) { %>
+                  <tr class="swap-target-row <%= a.hasPendingSwap ? 'text-muted' : '' %>"
+                      data-assignment-id="<%= a.id %>">
+                    <td>
+                      <input type="radio" name="their_assignment_id"
+                        value="<%= a.id %>"
+                        class="form-check-input"
+                        <%= a.hasPendingSwap ? 'disabled' : '' %>
+                        required>
+                    </td>
+                    <td><%= a.date %></td>
+                    <td><%= a.location_name %></td>
+                    <td><%= a.candidate_name %></td>
+                    <td>
+                      <% if (a.hasPendingSwap) { %>
+                        <span class="badge bg-secondary" style="font-size:0.6rem;">pending swap</span>
+                      <% } %>
+                    </td>
+                  </tr>
+                <% } %>
+                <% if (otherAssignments.length === 0) { %>
+                  <tr><td colspan="5" class="text-center text-muted py-3">No other assignments in the schedule yet.</td></tr>
+                <% } %>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Optional note -->
+          <div class="mb-2">
+            <label class="form-label">Message to the other deacon <span class="text-muted">(optional)</span></label>
+            <textarea class="form-control" name="message" rows="2"
+              placeholder="e.g. I have a conflict that Sunday — happy to swap!"></textarea>
+          </div>
+          <p class="text-muted small mb-0">
+            <i class="bi bi-info-circle"></i>
+            The other deacon will receive an email and must log in to approve or decline.
+            No change is made until they approve.
+          </p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-send"></i> Send Swap Request
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<style>
+  .my-row { background-color: #e8eef5 !important; }
+  .my-name { font-weight: 700; color: var(--mp-navy); }
+  tr.hidden-row { display: none; }
+  .swap-target-row:hover:not(.text-muted) { background: #f0f6ff; cursor: pointer; }
+  .swap-target-row input[type="radio"] { cursor: pointer; }
+</style>
+
+<script>
+  const myDates = <%- JSON.stringify(myDates) %>;
+
+  function showAll() {
+    document.querySelectorAll('tr[data-date]').forEach(r => r.classList.remove('hidden-row'));
+    document.getElementById('btnAll').classList.replace('btn-outline-success','btn-success');
+    document.getElementById('btnAll').classList.add('active');
+    document.getElementById('btnMine').classList.replace('btn-success','btn-outline-success');
+    document.getElementById('btnMine').classList.remove('active');
+  }
+
+  function showMine() {
+    document.querySelectorAll('tr[data-date]').forEach(r => {
+      r.classList.toggle('hidden-row', !myDates.includes(r.getAttribute('data-date')));
+    });
+    document.getElementById('btnMine').classList.replace('btn-outline-success','btn-success');
+    document.getElementById('btnMine').classList.add('active');
+    document.getElementById('btnAll').classList.replace('btn-success','btn-outline-success');
+    document.getElementById('btnAll').classList.remove('active');
+  }
+
+  function openSwapModal(assignmentId, date, locationName) {
+    document.getElementById('myAssignmentId').value = assignmentId;
+    document.getElementById('swapOfferLabel').textContent = date + ' — ' + locationName;
+
+    // Clear previous radio selection
+    document.querySelectorAll('input[name="their_assignment_id"]').forEach(r => r.checked = false);
+
+    // Make entire row clickable
+    document.querySelectorAll('.swap-target-row').forEach(row => {
+      row.onclick = () => {
+        const radio = row.querySelector('input[type="radio"]');
+        if (!radio.disabled) radio.checked = true;
+      };
+    });
+
+    new bootstrap.Modal(document.getElementById('swapModal')).show();
+  }
+</script>
+
+<%- include('../partials/footer') %>
