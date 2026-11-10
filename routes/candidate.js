@@ -5,6 +5,12 @@ const crypto = require('crypto');
 const db = require('../db');
 const { requireCandidate } = require('../middleware/auth');
 const mailer = require('../services/mailer');
+const { generateScheduleBuffer } = require('../services/scheduler');
+
+const SWAP_NOTIFY_EMAILS = (process.env.SWAP_NOTIFY_EMAILS || '')
+  .split(',')
+  .map(e => e.trim())
+  .filter(Boolean);
 
 // ─── Magic Link Authentication (still works as fallback) ──
 router.get('/auth', (req, res) => {
@@ -146,12 +152,34 @@ router.get('/portal', requireCandidate, (req, res) => {
     ORDER BY a.date
   `, [candidate.id]);
 
+  // Draft (upcoming) period data
+  const draftDeadline = settings.draft_input_deadline ? new Date(settings.draft_input_deadline) : null;
+  const draftIsLocked = draftDeadline ? now > draftDeadline : false;
+  const draftBlackoutDates = (settings.draft_start_date && settings.draft_end_date)
+    ? db.queryAll(
+        'SELECT date FROM blackout_dates WHERE candidate_id = ? AND is_system_generated = 0 AND date >= ? AND date <= ?',
+        [candidate.id, settings.draft_start_date, settings.draft_end_date]
+      ).map(r => r.date)
+    : [];
+  const myDraftAssignments = (settings.draft_visible_to_candidates && settings.draft_start_date)
+    ? db.queryAll(`
+        SELECT d.date, l.name AS location_name
+        FROM draft_assignments d
+        JOIN locations l ON d.location_id = l.id
+        WHERE d.candidate_id = ?
+        ORDER BY d.date
+      `, [candidate.id])
+    : [];
+
   res.render('candidate/portal', {
     candidate,
     settings,
     blackoutDates,
     isLocked,
     myAssignments,
+    myDraftAssignments,
+    draftBlackoutDates,
+    draftIsLocked,
     pendingSwapCount: getPendingSwapCount(candidate.id)
   });
 });
@@ -171,26 +199,65 @@ router.post('/save-blackouts', requireCandidate, (req, res) => {
   const candidateId = req.session.candidate.id;
 
   db.transaction(() => {
-    // Remove existing user-submitted blackout dates
-    db.run('DELETE FROM blackout_dates WHERE candidate_id = ? AND is_system_generated = 0', [candidateId]);
+    // Remove only blackouts within the current schedule range (preserves draft-period blackouts)
+    if (settings.schedule_start_date && settings.schedule_end_date) {
+      db.run(
+        'DELETE FROM blackout_dates WHERE candidate_id = ? AND is_system_generated = 0 AND date >= ? AND date <= ?',
+        [candidateId, settings.schedule_start_date, settings.schedule_end_date]
+      );
+    } else {
+      db.run('DELETE FROM blackout_dates WHERE candidate_id = ? AND is_system_generated = 0', [candidateId]);
+    }
 
-    // Insert new blackout dates
     if (dates && dates.length > 0) {
       for (const date of dates) {
         try {
           db.run('INSERT INTO blackout_dates (candidate_id, date, is_system_generated) VALUES (?, ?, 0)',
             [candidateId, date]);
-        } catch (e) {
-          // Ignore duplicate
-        }
+        } catch (e) { /* ignore duplicates */ }
       }
     }
 
-    // Mark as submitted
     db.run('UPDATE candidates SET has_submitted_input = 1 WHERE id = ?', [candidateId]);
   });
 
   res.json({ success: true, message: 'Your availability has been saved.' });
+});
+
+// ─── Save Draft (Upcoming Period) Blackout Dates ──
+router.post('/save-draft-blackouts', requireCandidate, (req, res) => {
+  const settings = db.queryOne('SELECT * FROM system_settings WHERE id = 1');
+
+  if (!settings.draft_start_date || !settings.draft_end_date) {
+    return res.status(400).json({ error: 'No upcoming period is configured.' });
+  }
+
+  const now = new Date();
+  const deadline = settings.draft_input_deadline ? new Date(settings.draft_input_deadline) : null;
+  if (deadline && now > deadline) {
+    return res.status(403).json({ error: 'The availability deadline for the upcoming period has passed.' });
+  }
+
+  const { dates } = req.body;
+  const candidateId = req.session.candidate.id;
+
+  db.transaction(() => {
+    db.run(
+      'DELETE FROM blackout_dates WHERE candidate_id = ? AND is_system_generated = 0 AND date >= ? AND date <= ?',
+      [candidateId, settings.draft_start_date, settings.draft_end_date]
+    );
+
+    if (dates && dates.length > 0) {
+      for (const date of dates) {
+        try {
+          db.run('INSERT INTO blackout_dates (candidate_id, date, is_system_generated) VALUES (?, ?, 0)',
+            [candidateId, date]);
+        } catch (e) { /* ignore duplicates */ }
+      }
+    }
+  });
+
+  res.json({ success: true, message: 'Your upcoming availability has been saved.' });
 });
 
 // ─── Shared helper: pending swap count for nav badge ──
@@ -440,6 +507,24 @@ router.post('/swaps/:id/approve', requireCandidate, async (req, res) => {
     );
   } catch (err) {
     console.error('Swap approval email failed:', err.message);
+  }
+
+  // Notify admin list with updated schedule attached
+  if (SWAP_NOTIFY_EMAILS.length) try {
+    let scheduleAttachment = null;
+    try {
+      scheduleAttachment = await generateScheduleBuffer();
+    } catch (e) {
+      console.error('Could not generate schedule attachment:', e.message);
+    }
+    await mailer.sendSwapApprovedNotification(
+      SWAP_NOTIFY_EMAILS, requester.name, me.name,
+      { date: theirA.date, location_name: theirA.location_name },
+      { date: myA.date,    location_name: myA.location_name },
+      scheduleAttachment
+    );
+  } catch (err) {
+    console.error('Swap notification email failed:', err.message);
   }
 
   res.redirect('/candidate/swaps?success=' + encodeURIComponent(

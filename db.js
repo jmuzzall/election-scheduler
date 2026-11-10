@@ -132,6 +132,66 @@ async function initialize() {
   `);
 
   db.run(`
+    CREATE TABLE IF NOT EXISTS admin_reset_tokens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      admin_id INTEGER NOT NULL,
+      token TEXT UNIQUE NOT NULL,
+      expires_at TEXT NOT NULL,
+      used INTEGER DEFAULT 0,
+      FOREIGN KEY (admin_id) REFERENCES admins(id) ON DELETE CASCADE
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS schedule_archives (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      label TEXT NOT NULL,
+      notes TEXT,
+      period_start TEXT,
+      period_end TEXT,
+      input_deadline TEXT,
+      assignment_count INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
+      created_by_name TEXT NOT NULL
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS archive_assignments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      archive_id INTEGER NOT NULL,
+      date TEXT NOT NULL,
+      location_name TEXT NOT NULL,
+      candidate_name TEXT NOT NULL,
+      candidate_email TEXT NOT NULL,
+      FOREIGN KEY (archive_id) REFERENCES schedule_archives(id) ON DELETE CASCADE
+    )
+  `);
+
+  // Migrations: add lookback columns to system_settings if upgrading
+  try { db.run('ALTER TABLE system_settings ADD COLUMN lookback_window INTEGER DEFAULT 0'); } catch(e) {}
+  try { db.run('ALTER TABLE system_settings ADD COLUMN lookback_type TEXT DEFAULT \'periods\''); } catch(e) {}
+
+  // Migrations: draft schedule settings
+  try { db.run("ALTER TABLE system_settings ADD COLUMN draft_start_date TEXT"); } catch(e) {}
+  try { db.run("ALTER TABLE system_settings ADD COLUMN draft_end_date TEXT"); } catch(e) {}
+  try { db.run("ALTER TABLE system_settings ADD COLUMN draft_input_deadline TEXT"); } catch(e) {}
+  try { db.run("ALTER TABLE system_settings ADD COLUMN draft_visible_to_candidates INTEGER DEFAULT 0"); } catch(e) {}
+
+  // Migrations: individual duty reminder settings
+  try { db.run('ALTER TABLE system_settings ADD COLUMN duty_reminder_enabled INTEGER DEFAULT 0'); } catch(e) {}
+  try { db.run('ALTER TABLE system_settings ADD COLUMN duty_reminder_days_first INTEGER DEFAULT 7'); } catch(e) {}
+  try { db.run('ALTER TABLE system_settings ADD COLUMN duty_reminder_days_final INTEGER DEFAULT 1'); } catch(e) {}
+
+  // Migrations: Sunday group reminder settings
+  try { db.run("ALTER TABLE system_settings ADD COLUMN sunday_reminder_enabled INTEGER DEFAULT 0"); } catch(e) {}
+  try { db.run("ALTER TABLE system_settings ADD COLUMN sunday_reminder_day INTEGER DEFAULT 4"); } catch(e) {}
+  try { db.run("ALTER TABLE system_settings ADD COLUMN sunday_reminder_hour INTEGER DEFAULT 14"); } catch(e) {}
+  try { db.run("ALTER TABLE system_settings ADD COLUMN sunday_email_subject TEXT DEFAULT 'Duty Deacon Reminder'"); } catch(e) {}
+  try { db.run("ALTER TABLE system_settings ADD COLUMN sunday_email_body TEXT DEFAULT ''"); } catch(e) {}
+  try { db.run("ALTER TABLE system_settings ADD COLUMN sunday_email_cc TEXT DEFAULT 'jim.muzzall@gmail.com,ashley@mcleanpres.org,jvogan@mcleanpres.org'"); } catch(e) {}
+
+  db.run(`
     CREATE TABLE IF NOT EXISTS reminder_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       candidate_id INTEGER NOT NULL,
@@ -139,6 +199,40 @@ async function initialize() {
       reminder_type TEXT NOT NULL,
       sent_at TEXT DEFAULT (datetime('now')),
       UNIQUE(candidate_id, deadline, reminder_type),
+      FOREIGN KEY (candidate_id) REFERENCES candidates(id) ON DELETE CASCADE
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS sunday_reminder_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      sunday_date TEXT UNIQUE NOT NULL,
+      sent_at TEXT DEFAULT (datetime('now')),
+      recipients TEXT,
+      subject TEXT
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS draft_assignments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      candidate_id INTEGER NOT NULL,
+      location_id INTEGER NOT NULL,
+      date TEXT NOT NULL,
+      FOREIGN KEY (candidate_id) REFERENCES candidates(id) ON DELETE CASCADE,
+      FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE CASCADE
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS duty_reminder_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      candidate_id INTEGER NOT NULL,
+      assignment_date TEXT NOT NULL,
+      location_id INTEGER NOT NULL,
+      reminder_type TEXT NOT NULL,
+      sent_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(candidate_id, assignment_date, location_id, reminder_type),
       FOREIGN KEY (candidate_id) REFERENCES candidates(id) ON DELETE CASCADE
     )
   `);

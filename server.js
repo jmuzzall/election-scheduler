@@ -44,6 +44,10 @@ app.use('/admin', require('./routes/admin'));
 app.use('/candidate', require('./routes/candidate'));
 app.use('/api', require('./routes/api'));
 
+app.get('/help', (req, res) => {
+  res.render('help');
+});
+
 // 404 handler
 app.use((req, res) => {
   res.status(404).render('error', { message: 'Page not found', status: 404 });

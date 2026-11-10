@@ -3,9 +3,9 @@ const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const db = require('../db');
 const { requireAdmin } = require('../middleware/auth');
-const { generateSchedule } = require('../services/scheduler');
+const { generateSchedule, generateDraftSchedule } = require('../services/scheduler');
 const mailer = require('../services/mailer');
-const { sendManualReminders } = require('../services/reminderScheduler');
+const { sendManualReminders, sendFollowupReminders, sendManualDutyReminders, sendManualSundayReminder, sendTestSundayEmail } = require('../services/reminderScheduler');
 
 // ─── Generate Schedule ─────────────────────────────
 router.post('/generate-schedule', requireAdmin, (req, res) => {
@@ -14,6 +14,55 @@ router.post('/generate-schedule', requireAdmin, (req, res) => {
     res.json({ success: true, ...result });
   } catch (err) {
     res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+// ─── Generate Draft Schedule ───────────────────────
+router.post('/generate-draft-schedule', requireAdmin, (req, res) => {
+  try {
+    const result = generateDraftSchedule();
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+// ─── Draft Assignment Overrides ────────────────────
+router.post('/draft-assignments/add', requireAdmin, (req, res) => {
+  const { candidate_id, location_id, date } = req.body;
+  try {
+    const existing = db.queryOne(
+      'SELECT * FROM draft_assignments WHERE candidate_id = ? AND date = ?',
+      [candidate_id, date]
+    );
+    if (existing) return res.status(400).json({ error: 'Candidate is already assigned on that date.' });
+    db.run('INSERT INTO draft_assignments (candidate_id, location_id, date) VALUES (?, ?, ?)',
+      [candidate_id, location_id, date]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.post('/draft-assignments/:id/delete', requireAdmin, (req, res) => {
+  db.run('DELETE FROM draft_assignments WHERE id = ?', [req.params.id]);
+  res.json({ success: true });
+});
+
+router.post('/draft-assignments/:id/update', requireAdmin, (req, res) => {
+  const { candidate_id } = req.body;
+  try {
+    const assignment = db.queryOne('SELECT * FROM draft_assignments WHERE id = ?', [req.params.id]);
+    if (!assignment) return res.status(404).json({ error: 'Assignment not found.' });
+    const conflict = db.queryOne(
+      'SELECT * FROM draft_assignments WHERE candidate_id = ? AND date = ? AND id != ?',
+      [candidate_id, assignment.date, req.params.id]
+    );
+    if (conflict) return res.status(400).json({ error: 'Candidate is already assigned on that date.' });
+    db.run('UPDATE draft_assignments SET candidate_id = ? WHERE id = ?', [candidate_id, req.params.id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
   }
 });
 
@@ -203,6 +252,69 @@ router.get('/export-schedule', requireAdmin, async (req, res) => {
   res.end();
 });
 
+// ─── Export Draft Schedule to Excel ───────────────
+router.get('/export-draft-schedule', requireAdmin, async (req, res) => {
+  const ExcelJS = require('exceljs');
+  const settings = db.queryOne('SELECT * FROM system_settings WHERE id = 1');
+  const locations = db.queryAll('SELECT * FROM locations ORDER BY name');
+
+  const assignments = db.queryAll(`
+    SELECT d.date, d.location_id, c.name as candidate_name, l.name as location_name
+    FROM draft_assignments d
+    JOIN candidates c ON d.candidate_id = c.id
+    JOIN locations l ON d.location_id = l.id
+    ORDER BY d.date, l.name, c.name
+  `);
+
+  const scheduleByDate = {};
+  for (const a of assignments) {
+    if (!scheduleByDate[a.date]) scheduleByDate[a.date] = {};
+    if (!scheduleByDate[a.date][a.location_name]) scheduleByDate[a.date][a.location_name] = [];
+    scheduleByDate[a.date][a.location_name].push(a.candidate_name);
+  }
+
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'Election Scheduler';
+  const sheet = workbook.addWorksheet('Upcoming Schedule');
+
+  const headerRow = ['Date', ...locations.map(l => l.name)];
+  const header = sheet.addRow(headerRow);
+  header.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF5A6D1E' } };
+  header.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 12 };
+  header.alignment = { horizontal: 'center', vertical: 'middle' };
+
+  sheet.getColumn(1).width = 16;
+  locations.forEach((l, i) => { sheet.getColumn(i + 2).width = 25; });
+
+  const dates = Object.keys(scheduleByDate).sort();
+  for (const date of dates) {
+    const dayName = new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short' });
+    const rowData = [`${dayName} ${date}`];
+    for (const loc of locations) {
+      rowData.push((scheduleByDate[date][loc.name] || []).join(', '));
+    }
+    const row = sheet.addRow(rowData);
+    row.alignment = { vertical: 'top', wrapText: true };
+    if (dates.indexOf(date) % 2 === 0) {
+      row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F8EE' } };
+    }
+  }
+
+  sheet.eachRow((row) => {
+    row.eachCell((cell) => {
+      cell.border = {
+        top: { style: 'thin' }, left: { style: 'thin' },
+        bottom: { style: 'thin' }, right: { style: 'thin' }
+      };
+    });
+  });
+
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="upcoming-schedule-${new Date().toISOString().split('T')[0]}.xlsx"`);
+  await workbook.xlsx.write(res);
+  res.end();
+});
+
 // ─── Export Blackout Dates to Excel ───────────────
 router.get('/export-blackouts', requireAdmin, async (req, res) => {
   const ExcelJS = require('exceljs');
@@ -305,14 +417,114 @@ router.get('/export-blackouts', requireAdmin, async (req, res) => {
   res.end();
 });
 
+// ─── Export Archive to Excel ───────────────────────
+router.get('/export-archive/:id', requireAdmin, async (req, res) => {
+  const ExcelJS = require('exceljs');
+  const archive = db.queryOne('SELECT * FROM schedule_archives WHERE id = ?', [req.params.id]);
+  if (!archive) return res.status(404).send('Archive not found.');
+
+  const assignments = db.queryAll(
+    'SELECT * FROM archive_assignments WHERE archive_id = ? ORDER BY date, location_name, candidate_name',
+    [archive.id]
+  );
+
+  const locationNames = [...new Set(assignments.map(a => a.location_name))].sort();
+
+  const byDate = {};
+  for (const a of assignments) {
+    if (!byDate[a.date]) byDate[a.date] = {};
+    if (!byDate[a.date][a.location_name]) byDate[a.date][a.location_name] = [];
+    byDate[a.date][a.location_name].push(a.candidate_name);
+  }
+
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'Election Scheduler';
+  const sheet = workbook.addWorksheet(archive.label.substring(0, 31));
+
+  const headerRow = sheet.addRow(['Date', ...locationNames]);
+  headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1B3A5C' } };
+  headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 12 };
+  headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
+  sheet.getColumn(1).width = 16;
+  locationNames.forEach((_, i) => { sheet.getColumn(i + 2).width = 25; });
+
+  const dates = Object.keys(byDate).sort();
+  dates.forEach((date, idx) => {
+    const dayName = new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short' });
+    const row = sheet.addRow([`${dayName} ${date}`, ...locationNames.map(l => (byDate[date][l] || []).join(', '))]);
+    row.alignment = { vertical: 'top', wrapText: true };
+    if (idx % 2 === 0) row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F3F4' } };
+    row.eachCell(cell => {
+      cell.border = { top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} };
+    });
+  });
+
+  const safeLabel = archive.label.replace(/[^a-z0-9]/gi, '-').toLowerCase();
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="archive-${safeLabel}.xlsx"`);
+  await workbook.xlsx.write(res);
+  res.end();
+});
+
 // ─── Send Availability Reminders (manual trigger) ──
 router.post('/send-reminders', requireAdmin, async (req, res) => {
   try {
-    const result = await sendManualReminders();
+    const customMessage = (req.body.custom_message || '').trim() || null;
+    const result = await sendManualReminders(customMessage);
     res.json({ success: true, ...result });
   } catch (err) {
     res.status(400).json({ success: false, error: err.message });
   }
+});
+
+// ─── Send Follow-up to Unactivated Accounts ────────
+router.post('/send-followup', requireAdmin, async (req, res) => {
+  try {
+    const customMessage = (req.body.custom_message || '').trim() || null;
+    const result = await sendFollowupReminders(customMessage);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+// ─── Send Duty Reminders to Assigned Deacons ───────
+router.post('/send-duty-reminders', requireAdmin, async (req, res) => {
+  try {
+    const customMessage = (req.body.custom_message || '').trim() || null;
+    const result = await sendManualDutyReminders(customMessage);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+// ─── Sunday Group Reminder ──────────────────────────
+router.post('/send-sunday-reminder', requireAdmin, async (req, res) => {
+  try {
+    const result = await sendManualSundayReminder();
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+router.post('/test-sunday-email', requireAdmin, async (req, res) => {
+  try {
+    const toEmail = (req.body.to_email || '').trim();
+    if (!toEmail) return res.status(400).json({ success: false, error: 'No email address provided.' });
+    await sendTestSundayEmail(toEmail);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+router.post('/toggle-sunday-sending', requireAdmin, (req, res) => {
+  const settings = db.queryOne('SELECT sunday_reminder_enabled FROM system_settings WHERE id = 1');
+  const newVal = settings.sunday_reminder_enabled ? 0 : 1;
+  db.run('UPDATE system_settings SET sunday_reminder_enabled = ? WHERE id = 1', [newVal]);
+  res.json({ success: true, enabled: newVal === 1 });
 });
 
 module.exports = router;

@@ -88,16 +88,64 @@ function assign(candidate, locationId, sunday, sundayIndex, shiftCounts, dailyAs
  *   not creating a back-to-back). Repeats until no further improvement
  *   is possible or the iteration cap is reached.
  */
-function generateSchedule() {
-  const settings = db.queryOne('SELECT * FROM system_settings WHERE id = 1');
-  if (!settings || !settings.schedule_start_date || !settings.schedule_end_date) {
-    throw new Error('Schedule date range not configured. Set start and end dates in Settings.');
+// ─── Shared scheduling core ──────────────────────────────────────────────────
+
+function _runCore(startDate, endDate, settings, targetTable) {
+  const lookbackWindow = parseInt(settings.lookback_window) || 0;
+  const lookbackType   = settings.lookback_type || 'periods';
+
+  const historicalShifts = {};
+  const historicalCap    = {};
+  let   historicalPeriods = [];
+
+  const tempCandidates = db.queryAll('SELECT * FROM candidates');
+  tempCandidates.forEach(c => { historicalShifts[c.id] = 0; historicalCap[c.id] = 0; });
+
+  if (lookbackWindow > 0) {
+    let archives;
+    if (lookbackType === 'months') {
+      const cutoff = new Date();
+      cutoff.setMonth(cutoff.getMonth() - lookbackWindow);
+      archives = db.queryAll(
+        `SELECT * FROM schedule_archives WHERE created_at >= ? ORDER BY created_at DESC`,
+        [cutoff.toISOString().slice(0, 19)]
+      );
+    } else {
+      archives = db.queryAll(
+        `SELECT * FROM schedule_archives ORDER BY created_at DESC LIMIT ?`,
+        [lookbackWindow]
+      );
+    }
+
+    historicalPeriods = archives.map(a => a.label);
+
+    const emailToId = {};
+    tempCandidates.forEach(c => { emailToId[c.email.toLowerCase()] = c.id; });
+
+    const maxShiftsById = {};
+    tempCandidates.forEach(c => { maxShiftsById[c.id] = c.max_shifts || 1; });
+
+    for (const archive of archives) {
+      const counts = db.queryAll(
+        `SELECT candidate_email, COUNT(*) as cnt FROM archive_assignments
+         WHERE archive_id = ? GROUP BY candidate_email`,
+        [archive.id]
+      );
+      for (const row of counts) {
+        const cid = emailToId[(row.candidate_email || '').toLowerCase()];
+        if (cid !== undefined) {
+          historicalShifts[cid] += row.cnt;
+          historicalCap[cid]    += (maxShiftsById[cid] || 1);
+        }
+      }
+    }
+
+    if (archives.length > 0) {
+      console.log(`[Scheduler] Historical fairness: ${archives.length} archive(s) — ${historicalPeriods.join(', ')}`);
+    }
   }
 
-  preprocessCandidates(settings);
-  db.run('DELETE FROM assignments');
-
-  const sundays = getSundays(settings.schedule_start_date, settings.schedule_end_date);
+  const sundays = getSundays(startDate, endDate);
   if (sundays.length === 0) throw new Error('No Sundays found in the configured date range.');
 
   const locations = db.queryAll('SELECT * FROM locations ORDER BY name');
@@ -109,45 +157,39 @@ function generateSchedule() {
   const blackoutRows = db.queryAll('SELECT candidate_id, date FROM blackout_dates');
   const blackoutSet = new Set(blackoutRows.map(r => `${r.candidate_id}-${r.date}`));
 
-  // ── Pre-compute effective capacity for each candidate ──────────────────────
-  // Effective capacity = the most they could realistically work:
-  //   min(their max_shifts preference, number of Sundays they are available)
-  const availableCount = {};   // how many Sundays they're not blacked out
-  const effectiveCap = {};     // min(max_shifts, availableCount)
+  const availableCount = {};
+  const effectiveCap = {};
   candidates.forEach(c => {
     availableCount[c.id] = sundays.filter(s => !blackoutSet.has(`${c.id}-${s}`)).length;
     effectiveCap[c.id] = Math.min(c.max_shifts, availableCount[c.id]);
   });
 
-  // ── Tracking state ─────────────────────────────────────────────────────────
-  const shiftCounts = {};        // shifts assigned so far
-  const dailyAssigned = {};      // set of candidate IDs per Sunday (hard: one per day)
-  const lastServedIndex = {};    // index of the most recent Sunday each person was assigned
+  const shiftCounts = {};
+  const dailyAssigned = {};
+  const lastServedIndex = {};
 
   candidates.forEach(c => {
     shiftCounts[c.id] = 0;
-    lastServedIndex[c.id] = -99; // far in the past
+    lastServedIndex[c.id] = -99;
   });
 
   const allAssignments = [];
   let unfilledSlots = 0;
 
-  // ── Utilization sort ───────────────────────────────────────────────────────
-  // Lower ratio → person has more "room" relative to their capacity → higher priority.
-  // Tiebreaker 1: fewest effective available dates (most constrained candidate goes first
-  //   so they are not squeezed out by less-constrained peers with equal utilization).
-  // Tiebreaker 2: candidate ID (deterministic, avoids random re-ordering across runs).
-  function byUtilization(list) {
-    return [...list].sort((a, b) => {
-      const ra = shiftCounts[a.id] / (effectiveCap[a.id] || 1);
-      const rb = shiftCounts[b.id] / (effectiveCap[b.id] || 1);
-      return (ra - rb)
-          || (effectiveCap[a.id] - effectiveCap[b.id])   // most constrained first
-          || (a.id - b.id);                               // deterministic tiebreaker
-    });
+  function compositeRatio(c) {
+    const totalShifts = shiftCounts[c.id] + historicalShifts[c.id];
+    const totalCap    = (effectiveCap[c.id] || 1) + historicalCap[c.id];
+    return totalShifts / totalCap;
   }
 
-  // ── Phase 1: Greedy fill ───────────────────────────────────────────────────
+  function byUtilization(list) {
+    return [...list].sort((a, b) =>
+      (compositeRatio(a) - compositeRatio(b))
+      || (effectiveCap[a.id] - effectiveCap[b.id])
+      || (a.id - b.id)
+    );
+  }
+
   for (let si = 0; si < sundays.length; si++) {
     const sunday = sundays[si];
     dailyAssigned[sunday] = new Set();
@@ -155,18 +197,16 @@ function generateSchedule() {
     for (const location of locations) {
       let slotsRemaining = location.slots_per_day;
 
-      // ── 1a: Under cap + no back-to-back ─────────────────────────────────
       for (const c of byUtilization(candidates)) {
         if (slotsRemaining <= 0) break;
         if (blackoutSet.has(`${c.id}-${sunday}`)) continue;
         if (dailyAssigned[sunday].has(c.id)) continue;
         if (shiftCounts[c.id] >= c.max_shifts) continue;
-        if (lastServedIndex[c.id] === si - 1) continue;   // back-to-back
+        if (lastServedIndex[c.id] === si - 1) continue;
         assign(c, location.id, sunday, si, shiftCounts, dailyAssigned, lastServedIndex, allAssignments);
         slotsRemaining--;
       }
 
-      // ── 1b: Under cap + back-to-back OK (relax consecutive constraint) ──
       if (slotsRemaining > 0) {
         for (const c of byUtilization(candidates)) {
           if (slotsRemaining <= 0) break;
@@ -178,7 +218,6 @@ function generateSchedule() {
         }
       }
 
-      // ── 1c: Over cap — sorted fewest shifts first (relax max_shifts) ────
       if (slotsRemaining > 0) {
         const overCap = candidates
           .filter(c =>
@@ -199,60 +238,30 @@ function generateSchedule() {
     }
   }
 
-  // ── Phase 2: Swap improvement ──────────────────────────────────────────────
-  // Repeatedly find the most over-utilized candidate and try to transfer one of
-  // their assignments to the most under-utilized candidate who can legally take it.
-  // A swap is valid when the recipient is:
-  //   • not blacked out on that date
-  //   • not already assigned on that date
-  //   • would not create a back-to-back for themselves
-  //   • would not create a back-to-back for the donor (after removal)
-  // Stop when no swap improves the ratio spread, or after MAX_SWAPS attempts.
-
   const MAX_SWAPS = 500;
   let swapsDone = 0;
+  const sundayIndexMap = Object.fromEntries(sundays.map((s, i) => [s, i]));
 
   for (let iter = 0; iter < MAX_SWAPS; iter++) {
-    // Sort by utilization ratio descending (most over-used first)
-    const ranked = [...candidates].sort((a, b) => {
-      const ra = shiftCounts[a.id] / (effectiveCap[a.id] || 1);
-      const rb = shiftCounts[b.id] / (effectiveCap[b.id] || 1);
-      return rb - ra;
-    });
-
+    const ranked = [...candidates].sort((a, b) => compositeRatio(b) - compositeRatio(a));
     const donor = ranked[0];
-    // Best recipient: under-utilized, still under their cap
     const recipient = ranked.slice(1).reverse().find(c => shiftCounts[c.id] < c.max_shifts);
 
-    if (!recipient) break; // everyone is at cap — no point swapping
-
-    const donorRatio = shiftCounts[donor.id] / (effectiveCap[donor.id] || 1);
-    const recipientRatio = shiftCounts[recipient.id] / (effectiveCap[recipient.id] || 1);
-
-    // Only bother if there's a meaningful imbalance (> 5% of capacity)
-    if (donorRatio - recipientRatio < 0.05) break;
-
-    // Find a donor assignment the recipient can legally take
-    const sundayIndexMap = Object.fromEntries(sundays.map((s, i) => [s, i]));
+    if (!recipient) break;
+    if (compositeRatio(donor) - compositeRatio(recipient) < 0.05) break;
 
     const swappable = allAssignments.find(a => {
       if (a.candidate_id !== donor.id) return false;
       const si = sundayIndexMap[a.date];
-
-      // Recipient must be available
       if (blackoutSet.has(`${recipient.id}-${a.date}`)) return false;
-      // Recipient must not already serve that day
       if (dailyAssigned[a.date].has(recipient.id)) return false;
-      // Recipient must not create a back-to-back
       if (sundays[si - 1] && dailyAssigned[sundays[si - 1]] && dailyAssigned[sundays[si - 1]].has(recipient.id)) return false;
       if (sundays[si + 1] && dailyAssigned[sundays[si + 1]] && dailyAssigned[sundays[si + 1]].has(recipient.id)) return false;
-
       return true;
     });
 
-    if (!swappable) break; // donor has no transferable assignment
+    if (!swappable) break;
 
-    // Execute the swap
     const si = sundayIndexMap[swappable.date];
     dailyAssigned[swappable.date].delete(donor.id);
     dailyAssigned[swappable.date].add(recipient.id);
@@ -260,28 +269,23 @@ function generateSchedule() {
     shiftCounts[recipient.id]++;
     swappable.candidate_id = recipient.id;
 
-    // Update lastServedIndex for donor (recalculate from remaining assignments)
     lastServedIndex[donor.id] = allAssignments
       .filter(a => a.candidate_id === donor.id)
       .reduce((max, a) => Math.max(max, sundayIndexMap[a.date]), -99);
-
-    // Update lastServedIndex for recipient
     lastServedIndex[recipient.id] = Math.max(lastServedIndex[recipient.id], si);
 
     swapsDone++;
   }
 
-  console.log(`Scheduler: ${allAssignments.length} assignments, ${swapsDone} balance swaps, ${unfilledSlots} unfilled slots.`);
+  console.log(`[Scheduler → ${targetTable}] ${allAssignments.length} assignments, ${swapsDone} swaps, ${unfilledSlots} unfilled.`);
 
-  // ── Save ───────────────────────────────────────────────────────────────────
   db.transaction(() => {
     for (const a of allAssignments) {
-      db.run('INSERT INTO assignments (candidate_id, location_id, date) VALUES (?, ?, ?)',
+      db.run(`INSERT INTO ${targetTable} (candidate_id, location_id, date) VALUES (?, ?, ?)`,
         [a.candidate_id, a.location_id, a.date]);
     }
   });
 
-  // ── Stats for response ─────────────────────────────────────────────────────
   const shiftValues = candidates.map(c => shiftCounts[c.id]);
   const avg = shiftValues.reduce((s, v) => s + v, 0) / shiftValues.length;
   const stdDev = Math.sqrt(shiftValues.reduce((s, v) => s + (v - avg) ** 2, 0) / shiftValues.length);
@@ -293,6 +297,7 @@ function generateSchedule() {
     sundays: sundays.length,
     locations: locations.length,
     candidates: candidates.length,
+    historicalPeriods,
     balanceStats: {
       min: Math.min(...shiftValues),
       max: Math.max(...shiftValues),
@@ -302,4 +307,92 @@ function generateSchedule() {
   };
 }
 
-module.exports = { generateSchedule, getSundays };
+function generateSchedule() {
+  const settings = db.queryOne('SELECT * FROM system_settings WHERE id = 1');
+  if (!settings || !settings.schedule_start_date || !settings.schedule_end_date) {
+    throw new Error('Schedule date range not configured. Set start and end dates in Settings.');
+  }
+  preprocessCandidates(settings);
+  db.run('DELETE FROM assignments');
+  return _runCore(settings.schedule_start_date, settings.schedule_end_date, settings, 'assignments');
+}
+
+function generateDraftSchedule() {
+  const settings = db.queryOne('SELECT * FROM system_settings WHERE id = 1');
+  if (!settings || !settings.draft_start_date || !settings.draft_end_date) {
+    throw new Error('Upcoming schedule date range not configured. Set draft start and end dates on the Upcoming page.');
+  }
+  const draftSettings = Object.assign({}, settings, {
+    schedule_start_date: settings.draft_start_date,
+    schedule_end_date:   settings.draft_end_date,
+    input_deadline:      settings.draft_input_deadline
+  });
+  preprocessCandidates(draftSettings);
+  let result;
+  db.transaction(() => {
+    db.run('DELETE FROM draft_assignments');
+    result = _runCore(settings.draft_start_date, settings.draft_end_date, settings, 'draft_assignments');
+  });
+  return result;
+}
+
+async function generateScheduleBuffer() {
+  const ExcelJS = require('exceljs');
+  const settings  = db.queryOne('SELECT * FROM system_settings WHERE id = 1');
+  const locations = db.queryAll('SELECT * FROM locations ORDER BY name');
+
+  const assignments = db.queryAll(`
+    SELECT a.date, l.name AS location_name, c.name AS candidate_name
+    FROM assignments a
+    JOIN candidates c ON a.candidate_id = c.id
+    JOIN locations  l ON a.location_id  = l.id
+    ORDER BY a.date, l.name, c.name
+  `);
+
+  const byDate = {};
+  for (const a of assignments) {
+    if (!byDate[a.date]) byDate[a.date] = {};
+    if (!byDate[a.date][a.location_name]) byDate[a.date][a.location_name] = [];
+    byDate[a.date][a.location_name].push(a.candidate_name);
+  }
+
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'Election Scheduler';
+  const sheet = workbook.addWorksheet('Schedule');
+
+  const headerRow = sheet.addRow(['Date', ...locations.map(l => l.name)]);
+  headerRow.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1B3A5C' } };
+  headerRow.font  = { bold: true, color: { argb: 'FFFFFFFF' }, size: 12 };
+  headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
+
+  sheet.getColumn(1).width = 16;
+  locations.forEach((_, i) => { sheet.getColumn(i + 2).width = 25; });
+
+  const dates = Object.keys(byDate).sort();
+  for (let i = 0; i < dates.length; i++) {
+    const date = dates[i];
+    const dayName = new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short' });
+    const rowData = [`${dayName} ${date}`, ...locations.map(l => (byDate[date][l.name] || []).join(', '))];
+    const row = sheet.addRow(rowData);
+    row.alignment = { vertical: 'top', wrapText: true };
+    if (i % 2 === 0) {
+      row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F3F4' } };
+    }
+  }
+
+  sheet.eachRow(row => row.eachCell(cell => {
+    cell.border = {
+      top: { style: 'thin' }, left: { style: 'thin' },
+      bottom: { style: 'thin' }, right: { style: 'thin' }
+    };
+  }));
+
+  const label = (settings && settings.schedule_start_date)
+    ? `${settings.schedule_start_date}--${settings.schedule_end_date || 'present'}`
+    : new Date().toISOString().split('T')[0];
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  return { buffer, filename: `schedule-${label}.xlsx` };
+}
+
+module.exports = { generateSchedule, generateDraftSchedule, generateScheduleBuffer, getSundays };
