@@ -33,8 +33,19 @@ async function initialize() {
       input_deadline TEXT,
       schedule_start_date TEXT,
       schedule_end_date TEXT,
-      admin_email TEXT NOT NULL,
-      admin_password_hash TEXT NOT NULL
+      admin_email TEXT NOT NULL DEFAULT '',
+      admin_password_hash TEXT NOT NULL DEFAULT ''
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS admins (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      email TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      is_super INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now'))
     )
   `);
 
@@ -44,7 +55,7 @@ async function initialize() {
       name TEXT NOT NULL,
       email TEXT UNIQUE NOT NULL,
       password_hash TEXT,
-      max_shifts INTEGER DEFAULT 4,
+      max_shifts INTEGER DEFAULT 26,
       has_submitted_input INTEGER DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now'))
     )
@@ -98,13 +109,177 @@ async function initialize() {
     )
   `);
 
-  // Seed default admin if not exists
-  const admin = queryOne('SELECT * FROM system_settings WHERE id = 1');
-  if (!admin) {
-    const hash = bcryptjs.hashSync('admin123', 10);
-    run('INSERT INTO system_settings (id, admin_email, admin_password_hash) VALUES (1, ?, ?)',
-      ['jim.muzzall@gmail.com', hash]);
-    console.log('Default admin created: jim.muzzall@gmail.com / admin123');
+  db.run(`
+    CREATE TABLE IF NOT EXISTS candidate_reset_tokens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      candidate_id INTEGER NOT NULL,
+      token TEXT UNIQUE NOT NULL,
+      expires_at TEXT NOT NULL,
+      used INTEGER DEFAULT 0,
+      FOREIGN KEY (candidate_id) REFERENCES candidates(id) ON DELETE CASCADE
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS admin_invite_tokens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      admin_id INTEGER NOT NULL,
+      token TEXT UNIQUE NOT NULL,
+      expires_at TEXT NOT NULL,
+      used INTEGER DEFAULT 0,
+      FOREIGN KEY (admin_id) REFERENCES admins(id) ON DELETE CASCADE
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS admin_reset_tokens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      admin_id INTEGER NOT NULL,
+      token TEXT UNIQUE NOT NULL,
+      expires_at TEXT NOT NULL,
+      used INTEGER DEFAULT 0,
+      FOREIGN KEY (admin_id) REFERENCES admins(id) ON DELETE CASCADE
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS schedule_archives (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      label TEXT NOT NULL,
+      notes TEXT,
+      period_start TEXT,
+      period_end TEXT,
+      input_deadline TEXT,
+      assignment_count INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
+      created_by_name TEXT NOT NULL
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS archive_assignments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      archive_id INTEGER NOT NULL,
+      date TEXT NOT NULL,
+      location_name TEXT NOT NULL,
+      candidate_name TEXT NOT NULL,
+      candidate_email TEXT NOT NULL,
+      FOREIGN KEY (archive_id) REFERENCES schedule_archives(id) ON DELETE CASCADE
+    )
+  `);
+
+  // Migrations: add lookback columns to system_settings if upgrading
+  try { db.run('ALTER TABLE system_settings ADD COLUMN lookback_window INTEGER DEFAULT 0'); } catch(e) {}
+  try { db.run('ALTER TABLE system_settings ADD COLUMN lookback_type TEXT DEFAULT \'periods\''); } catch(e) {}
+
+  // Migrations: campus for deacons and locations (existing rows default to McLean)
+  try { db.run("ALTER TABLE candidates ADD COLUMN campus TEXT DEFAULT 'McLean'"); } catch(e) {}
+  try { db.run("ALTER TABLE locations ADD COLUMN campus TEXT DEFAULT 'McLean'"); } catch(e) {}
+
+  // Migrations: draft schedule settings
+  try { db.run("ALTER TABLE system_settings ADD COLUMN draft_start_date TEXT"); } catch(e) {}
+  try { db.run("ALTER TABLE system_settings ADD COLUMN draft_end_date TEXT"); } catch(e) {}
+  try { db.run("ALTER TABLE system_settings ADD COLUMN draft_input_deadline TEXT"); } catch(e) {}
+  try { db.run("ALTER TABLE system_settings ADD COLUMN draft_visible_to_candidates INTEGER DEFAULT 0"); } catch(e) {}
+
+  // Migrations: individual duty reminder settings
+  try { db.run('ALTER TABLE system_settings ADD COLUMN duty_reminder_enabled INTEGER DEFAULT 0'); } catch(e) {}
+  try { db.run('ALTER TABLE system_settings ADD COLUMN duty_reminder_days_first INTEGER DEFAULT 7'); } catch(e) {}
+  try { db.run('ALTER TABLE system_settings ADD COLUMN duty_reminder_days_final INTEGER DEFAULT 1'); } catch(e) {}
+
+  // Migrations: Sunday group reminder settings
+  try { db.run("ALTER TABLE system_settings ADD COLUMN sunday_reminder_enabled INTEGER DEFAULT 0"); } catch(e) {}
+  try { db.run("ALTER TABLE system_settings ADD COLUMN sunday_reminder_day INTEGER DEFAULT 4"); } catch(e) {}
+  try { db.run("ALTER TABLE system_settings ADD COLUMN sunday_reminder_hour INTEGER DEFAULT 14"); } catch(e) {}
+  try { db.run("ALTER TABLE system_settings ADD COLUMN sunday_email_subject TEXT DEFAULT 'Duty Deacon Reminder'"); } catch(e) {}
+  try { db.run("ALTER TABLE system_settings ADD COLUMN sunday_email_body TEXT DEFAULT ''"); } catch(e) {}
+  try { db.run("ALTER TABLE system_settings ADD COLUMN sunday_email_cc TEXT DEFAULT 'jim.muzzall@gmail.com,ashley@mcleanpres.org,jvogan@mcleanpres.org'"); } catch(e) {}
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS reminder_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      candidate_id INTEGER NOT NULL,
+      deadline TEXT NOT NULL,
+      reminder_type TEXT NOT NULL,
+      sent_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(candidate_id, deadline, reminder_type),
+      FOREIGN KEY (candidate_id) REFERENCES candidates(id) ON DELETE CASCADE
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS sunday_reminder_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      sunday_date TEXT UNIQUE NOT NULL,
+      sent_at TEXT DEFAULT (datetime('now')),
+      recipients TEXT,
+      subject TEXT
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS draft_assignments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      candidate_id INTEGER NOT NULL,
+      location_id INTEGER NOT NULL,
+      date TEXT NOT NULL,
+      FOREIGN KEY (candidate_id) REFERENCES candidates(id) ON DELETE CASCADE,
+      FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE CASCADE
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS duty_reminder_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      candidate_id INTEGER NOT NULL,
+      assignment_date TEXT NOT NULL,
+      location_id INTEGER NOT NULL,
+      reminder_type TEXT NOT NULL,
+      sent_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(candidate_id, assignment_date, location_id, reminder_type),
+      FOREIGN KEY (candidate_id) REFERENCES candidates(id) ON DELETE CASCADE
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS swap_requests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      requester_id INTEGER NOT NULL,
+      requester_assignment_id INTEGER NOT NULL,
+      target_id INTEGER NOT NULL,
+      target_assignment_id INTEGER NOT NULL,
+      status TEXT DEFAULT 'pending',
+      message TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      resolved_at TEXT,
+      FOREIGN KEY (requester_id) REFERENCES candidates(id) ON DELETE CASCADE,
+      FOREIGN KEY (target_id) REFERENCES candidates(id) ON DELETE CASCADE,
+      FOREIGN KEY (requester_assignment_id) REFERENCES assignments(id) ON DELETE CASCADE,
+      FOREIGN KEY (target_assignment_id) REFERENCES assignments(id) ON DELETE CASCADE
+    )
+  `);
+
+  // Ensure system_settings row exists (schedule config only now)
+  const settings = queryOne('SELECT * FROM system_settings WHERE id = 1');
+  if (!settings) {
+    run('INSERT INTO system_settings (id, admin_email, admin_password_hash) VALUES (1, \'\', \'\')', []);
+  }
+
+  // Seed super admin into admins table if empty
+  const anyAdmin = queryOne('SELECT id FROM admins LIMIT 1');
+  if (!anyAdmin) {
+    // Migrate from legacy system_settings if credentials were stored there
+    const legacy = queryOne('SELECT * FROM system_settings WHERE id = 1');
+    if (legacy && legacy.admin_email && legacy.admin_password_hash) {
+      run('INSERT INTO admins (name, email, password_hash, is_super) VALUES (?, ?, ?, 1)',
+        ['Administrator', legacy.admin_email, legacy.admin_password_hash]);
+      console.log('Migrated existing admin to admins table:', legacy.admin_email);
+    } else {
+      const hash = bcryptjs.hashSync('admin123', 10);
+      run('INSERT INTO admins (name, email, password_hash, is_super) VALUES (?, ?, ?, 1)',
+        ['Administrator', 'jim.muzzall@gmail.com', hash]);
+      console.log('Default super admin created: jim.muzzall@gmail.com / admin123');
+    }
   }
 
   save();

@@ -1,0 +1,60 @@
+<% const title = 'Accept Invitation' %>
+<%- include('../partials/header') %>
+
+<div class="min-vh-100 d-flex align-items-center justify-content-center" style="background:var(--mp-cream);">
+  <div class="card border-0 shadow" style="width:100%;max-width:440px;">
+
+    <div style="background:var(--mp-navy);padding:24px;border-radius:8px 8px 0 0;text-align:center;">
+      <h4 style="color:#fff;margin:0;">
+        <i class="bi bi-shield-check me-2"></i>Admin Invitation
+      </h4>
+      <p style="color:rgba(255,255,255,0.75);margin:6px 0 0;font-size:14px;">
+        Sunday Duty Deacon Rotation Scheduler
+      </p>
+    </div>
+
+    <div class="card-body p-4">
+
+      <% if (error) { %>
+        <div class="alert alert-danger border-0 text-center">
+          <i class="bi bi-exclamation-triangle-fill d-block fs-2 mb-2"></i>
+          <%= error %>
+        </div>
+        <div class="text-center mt-3">
+          <a href="/" class="btn btn-outline-secondary btn-sm">Return to Home</a>
+        </div>
+
+      <% } else { %>
+        <p class="text-muted mb-4 text-center">
+          Welcome, <strong><%= name %></strong>! Choose a password to activate your admin account.
+        </p>
+
+        <% if (typeof successMsg !== 'undefined' && successMsg) { %>
+          <div class="alert alert-success border-0"><i class="bi bi-check-circle me-2"></i><%= successMsg %></div>
+        <% } %>
+
+        <form method="POST" action="/admin/accept-invite">
+          <input type="hidden" name="token" value="<%= token %>">
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">New Password</label>
+            <input type="password" class="form-control" name="password"
+              placeholder="At least 6 characters" minlength="6" required autofocus>
+          </div>
+          <div class="mb-4">
+            <label class="form-label fw-semibold">Confirm Password</label>
+            <input type="password" class="form-control" name="confirm_password"
+              placeholder="Re-enter your password" minlength="6" required>
+          </div>
+
+          <button type="submit" class="btn btn-primary w-100">
+            <i class="bi bi-check-lg me-1"></i> Activate My Account
+          </button>
+        </form>
+      <% } %>
+
+    </div>
+  </div>
+</div>
+
+<%- include('../partials/footer') %>

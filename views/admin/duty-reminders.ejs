@@ -1,0 +1,343 @@
+<% const title = 'Sunday Duty Reminders' %>
+<%- include('../partials/header') %>
+<%- include('../partials/admin-nav') %>
+
+<%
+const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const remDay  = parseInt(settings.sunday_reminder_day)  || 4;
+const remHour = parseInt(settings.sunday_reminder_hour) || 14;
+const enabled = !!settings.sunday_reminder_enabled;
+
+function hourLabel(h) {
+  if (h === 0)  return '12:00 AM';
+  if (h < 12)  return h + ':00 AM';
+  if (h === 12) return '12:00 PM';
+  return (h - 12) + ':00 PM';
+}
+%>
+
+<div class="container mt-4">
+
+  <!-- Page header -->
+  <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <h2 class="mb-0"><i class="bi bi-calendar2-event"></i> Sunday Duty Reminder Settings</h2>
+    <span class="badge fs-6 px-3 py-2" id="statusBadge"
+      style="background:<%= enabled ? '#198754' : '#dc3545' %>;">
+      <%= enabled ? 'ACTIVE' : 'PAUSED' %>
+    </span>
+  </div>
+
+  <% if (success) { %>
+    <div class="alert alert-success alert-dismissible fade show">
+      <i class="bi bi-check-circle"></i> <%= success %>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  <% } %>
+  <% if (error) { %>
+    <div class="alert alert-danger alert-dismissible fade show">
+      <i class="bi bi-exclamation-triangle"></i> <%= error %>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  <% } %>
+
+  <!-- Status / control card -->
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-body d-flex align-items-center justify-content-between flex-wrap gap-3">
+      <div>
+        <p class="fw-semibold mb-1">Automated Sending</p>
+        <p class="text-muted small mb-0">
+          When <strong>Active</strong>, the system checks every 15 minutes and sends a group reminder
+          email to all deacons serving the upcoming Sunday. Fires on
+          <strong><%= DAYS[remDay] %> at <%= hourLabel(remHour) %> ET</strong>.
+        </p>
+      </div>
+      <div class="d-flex gap-2 flex-shrink-0">
+        <button type="button" id="toggleBtn"
+          class="btn <%= enabled ? 'btn-danger' : 'btn-success' %>"
+          onclick="toggleSending()">
+          <i class="bi bi-<%= enabled ? 'pause-fill' : 'play-fill' %>"></i>
+          <span id="toggleLabel"><%= enabled ? 'Pause' : 'Activate' %></span>
+        </button>
+        <button type="button" class="btn btn-outline-primary"
+          data-bs-toggle="modal" data-bs-target="#sendNowModal">
+          <i class="bi bi-send-fill"></i> Send Now
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings form -->
+  <form method="POST" action="/admin/duty-reminders">
+
+    <div class="row g-4">
+
+      <!-- Send Schedule -->
+      <div class="col-md-5">
+        <div class="card border-0 shadow-sm h-100">
+          <div class="card-header bg-white fw-bold">
+            <i class="bi bi-clock"></i> Send Schedule
+            <span class="badge bg-light text-muted border ms-1 fw-normal" style="font-size:.7rem;">Eastern Time</span>
+          </div>
+          <div class="card-body">
+            <div class="mb-4">
+              <label class="form-label fw-semibold">Day of Week</label>
+              <select class="form-select" name="sunday_reminder_day">
+                <% for (let i = 0; i < 7; i++) { %>
+                  <option value="<%= i %>" <%= remDay === i ? 'selected' : '' %>><%= DAYS[i] %></option>
+                <% } %>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Time (ET)</label>
+              <select class="form-select" name="sunday_reminder_hour">
+                <% for (let h = 0; h < 24; h++) { %>
+                  <option value="<%= h %>" <%= remHour === h ? 'selected' : '' %>><%= hourLabel(h) %></option>
+                <% } %>
+              </select>
+            </div>
+            <div class="alert alert-light border small mb-0">
+              <i class="bi bi-info-circle text-muted me-1"></i>
+              Default: Thursday at 2:00 PM ET. The reminder fires at or after this
+              time on the configured day, once per upcoming Sunday.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Email Template -->
+      <div class="col-md-7">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white fw-bold">
+            <i class="bi bi-envelope"></i> Email Template
+          </div>
+          <div class="card-body">
+            <div class="mb-3">
+              <label class="form-label fw-semibold">From</label>
+              <input type="text" class="form-control bg-light" value="McLean Presbyterian Church" readonly>
+              <div class="form-text">Sender name — uses SMTP_USER as the email address.</div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Subject Line</label>
+              <input type="text" class="form-control" name="sunday_email_subject"
+                value="<%= settings.sunday_email_subject || 'Duty Deacon Reminder' %>"
+                placeholder="Duty Deacon Reminder" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Body Text
+                <span class="text-muted fw-normal">(optional)</span>
+              </label>
+              <div class="form-text mb-2">
+                The email always opens with:<br>
+                <em>"Dear [Deacon 1] and [Deacon 2], You are scheduled to serve on [Full Date]. Next week, [Deacon 3] and [Deacon 4] are scheduled to serve."</em><br>
+                Add any extra message content below.
+              </div>
+              <textarea class="form-control" name="sunday_email_body" rows="5"
+                placeholder="Additional text that appears in the email after the auto-generated opening…"><%= settings.sunday_email_body || '' %></textarea>
+            </div>
+            <div class="mb-0">
+              <label class="form-label fw-semibold">CC Addresses</label>
+              <input type="text" class="form-control" name="sunday_email_cc"
+                value="<%= settings.sunday_email_cc || 'jim.muzzall@gmail.com,ashley@mcleanpres.org,jvogan@mcleanpres.org' %>"
+                placeholder="email1@example.com, email2@example.com">
+              <div class="form-text">
+                Comma-separated list. Next-week deacons are CC'd automatically.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /row -->
+
+    <div class="mt-3">
+      <button type="submit" class="btn btn-primary">
+        <i class="bi bi-check-lg"></i> Save Settings
+      </button>
+    </div>
+  </form>
+
+  <!-- Test Email -->
+  <div class="card border-0 shadow-sm mt-4">
+    <div class="card-header bg-white fw-bold">
+      <i class="bi bi-envelope-check"></i> Send Test Email
+    </div>
+    <div class="card-body">
+      <p class="text-muted small mb-3">
+        Sends a test email using the <em>current saved</em> template with placeholder deacon names
+        (<strong>Test Deacon 1</strong> &amp; <strong>Test Deacon 2</strong>) and today's date.
+        The subject is prefixed with <strong>[TEST]</strong>. No CC recipients.
+      </p>
+      <div class="row g-2 align-items-end">
+        <div class="col-sm-7 col-md-5">
+          <label class="form-label">Send test to</label>
+          <input type="email" class="form-control" id="testEmailAddr"
+            placeholder="your@email.com">
+        </div>
+        <div class="col-auto">
+          <button type="button" class="btn btn-outline-secondary" onclick="sendTestEmail()">
+            <i class="bi bi-send"></i> Send Test
+          </button>
+        </div>
+      </div>
+      <div id="testEmailResult" class="mt-2"></div>
+    </div>
+  </div>
+
+  <!-- Recent reminder log -->
+  <div class="card border-0 shadow-sm mt-4 mb-5">
+    <div class="card-header bg-white fw-bold">
+      <i class="bi bi-clock-history"></i> Recent Reminders Sent
+    </div>
+    <% if (recentLogs.length === 0) { %>
+      <div class="card-body text-muted small">No group reminders have been sent yet.</div>
+    <% } else { %>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover table-sm mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Sunday</th>
+                <th>Sent At</th>
+                <th>Subject</th>
+                <th>Recipients</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% for (const log of recentLogs) { %>
+                <tr>
+                  <td class="fw-semibold text-nowrap">
+                    <%
+                      const ld = new Date(log.sunday_date + 'T00:00:00');
+                      const ldFmt = ld.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                    %>
+                    <%= ldFmt %>
+                  </td>
+                  <td class="text-muted small text-nowrap">
+                    <%= new Date(log.sent_at).toLocaleString('en-US', { month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit' }) %>
+                  </td>
+                  <td class="small"><%= log.subject %></td>
+                  <td class="text-muted small" style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
+                    title="<%= log.recipients %>">
+                    <%= log.recipients %>
+                  </td>
+                </tr>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    <% } %>
+  </div>
+
+</div><!-- /container -->
+
+<!-- Send Now Modal -->
+<div class="modal fade" id="sendNowModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header" style="background:var(--mp-navy);color:#fff;">
+        <h5 class="modal-title"><i class="bi bi-send-fill me-2"></i>Send Reminder Now</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p>
+          This will immediately send the Sunday Duty Deacon reminder to all deacons
+          scheduled for <strong><%= upcomingSundayDisplay %></strong>,
+          along with the configured CC list and next-week deacons.
+        </p>
+        <p class="text-muted small mb-0">
+          <i class="bi bi-info-circle"></i>
+          This records the send in the log, so the automated scheduler will not
+          send again for the same Sunday.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="sendNowBtn" onclick="sendNow()">
+          <i class="bi bi-send"></i> Send Now
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="sendNowResult" class="container px-4 mb-3" style="display:none;"></div>
+
+<script>
+async function toggleSending() {
+  const btn = document.getElementById('toggleBtn');
+  btn.disabled = true;
+  try {
+    const res  = await fetch('/api/toggle-sunday-sending', { method: 'POST' });
+    const data = await res.json();
+    if (data.success) {
+      const active = data.enabled;
+      document.getElementById('statusBadge').textContent  = active ? 'ACTIVE' : 'PAUSED';
+      document.getElementById('statusBadge').style.background = active ? '#198754' : '#dc3545';
+      document.getElementById('toggleLabel').textContent  = active ? 'Pause' : 'Activate';
+      btn.className = 'btn ' + (active ? 'btn-danger' : 'btn-success');
+      btn.querySelector('i').className = 'bi bi-' + (active ? 'pause-fill' : 'play-fill');
+    }
+  } catch(e) {
+    alert('Failed to toggle sending: ' + e.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function sendTestEmail() {
+  const addr = document.getElementById('testEmailAddr').value.trim();
+  if (!addr) { alert('Please enter an email address.'); return; }
+  const result = document.getElementById('testEmailResult');
+  result.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Sending…';
+  try {
+    const res  = await fetch('/api/test-sunday-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to_email: addr })
+    });
+    const data = await res.json();
+    result.innerHTML = data.success
+      ? `<div class="alert alert-success py-2 mb-0"><i class="bi bi-check-circle-fill me-1"></i>Test email sent to <strong>${addr}</strong>. Check your inbox (or server console in dev mode).</div>`
+      : `<div class="alert alert-danger py-2 mb-0"><i class="bi bi-exclamation-triangle-fill me-1"></i>${data.error}</div>`;
+  } catch(e) {
+    result.innerHTML = `<div class="alert alert-danger py-2 mb-0">Request failed: ${e.message}</div>`;
+  }
+}
+
+async function sendNow() {
+  const btn = document.getElementById('sendNowBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Sending…';
+  try {
+    const res  = await fetch('/api/send-sunday-reminder', { method: 'POST' });
+    const data = await res.json();
+    bootstrap.Modal.getInstance(document.getElementById('sendNowModal')).hide();
+    const resultEl = document.getElementById('sendNowResult');
+    resultEl.style.display = '';
+    if (data.success) {
+      resultEl.innerHTML = `
+        <div class="alert alert-success alert-dismissible fade show">
+          <i class="bi bi-check-circle-fill me-1"></i>
+          Reminder sent for <strong>${data.sunday}</strong> to:
+          <strong>${(data.deacons || []).join(', ')}</strong>.
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>`;
+      setTimeout(() => location.reload(), 2000);
+    } else {
+      resultEl.innerHTML = `
+        <div class="alert alert-danger alert-dismissible fade show">
+          <i class="bi bi-exclamation-triangle-fill me-1"></i> ${data.error}
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>`;
+    }
+  } catch(e) {
+    alert('Request failed: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-send"></i> Send Now';
+  }
+}
+</script>
+
+<%- include('../partials/footer') %>

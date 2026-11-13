@@ -44,6 +44,10 @@ app.use('/admin', require('./routes/admin'));
 app.use('/candidate', require('./routes/candidate'));
 app.use('/api', require('./routes/api'));
 
+app.get('/help', (req, res) => {
+  res.render('help');
+});
+
 // 404 handler
 app.use((req, res) => {
   res.status(404).render('error', { message: 'Page not found', status: 404 });
@@ -60,6 +64,8 @@ db.initialize().then(() => {
   app.listen(PORT, () => {
     console.log(`Election Scheduler running at http://localhost:${PORT}`);
   });
+  // Start the automated availability reminder scheduler
+  require('./services/reminderScheduler').start();
 }).catch(err => {
   console.error('Failed to initialize database:', err);
   process.exit(1);

@@ -1,0 +1,351 @@
+<% const title = 'Upcoming Schedule' %>
+<%- include('../partials/header') %>
+<%- include('../partials/admin-nav') %>
+
+<div class="container-fluid mt-4 px-4">
+  <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div>
+      <h2 class="mb-0"><i class="bi bi-calendar2-plus"></i> Upcoming Schedule</h2>
+      <div class="text-muted small mt-1">Build the next cycle's schedule while the current one is still active.</div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <button class="btn btn-success" id="btnGenerate" onclick="generateDraft()">
+        <i class="bi bi-lightning"></i> Generate Draft
+      </button>
+      <a href="/api/export-draft-schedule" class="btn btn-outline-primary">
+        <i class="bi bi-file-earmark-excel"></i> Export Excel
+      </a>
+      <% if (Object.keys(draftGrid).length > 0) { %>
+        <button class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#activateModal">
+          <i class="bi bi-check2-circle"></i> Activate
+        </button>
+      <% } %>
+    </div>
+  </div>
+
+  <% if (success) { %>
+    <div class="alert alert-success alert-dismissible fade show">
+      <i class="bi bi-check-circle"></i> <%= success %>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  <% } %>
+  <% if (error) { %>
+    <div class="alert alert-danger alert-dismissible fade show">
+      <i class="bi bi-exclamation-triangle"></i> <%= error %>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  <% } %>
+
+  <div id="generateResult" class="mb-3"></div>
+
+  <!-- Settings Card -->
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-header fw-bold" style="background:var(--mp-navy);color:#fff;">
+      <i class="bi bi-gear me-1"></i> Upcoming Period Settings
+    </div>
+    <div class="card-body">
+      <form method="POST" action="/admin/draft/settings">
+        <div class="row g-3 align-items-end">
+          <div class="col-sm-3">
+            <label class="form-label fw-semibold">Schedule Start Date</label>
+            <input type="date" class="form-control" name="draft_start_date"
+              value="<%= settings.draft_start_date || '' %>">
+          </div>
+          <div class="col-sm-3">
+            <label class="form-label fw-semibold">Schedule End Date</label>
+            <input type="date" class="form-control" name="draft_end_date"
+              value="<%= settings.draft_end_date || '' %>">
+          </div>
+          <div class="col-sm-3">
+            <label class="form-label fw-semibold">Availability Deadline</label>
+            <input type="datetime-local" class="form-control" name="draft_input_deadline"
+              value="<%= settings.draft_input_deadline ? settings.draft_input_deadline.slice(0,16) : '' %>">
+          </div>
+          <div class="col-sm-3">
+            <div class="form-check mt-4 pt-2">
+              <input class="form-check-input" type="checkbox" id="draftVisible"
+                name="draft_visible_to_candidates" value="1"
+                <%= settings.draft_visible_to_candidates ? 'checked' : '' %>>
+              <label class="form-check-label" for="draftVisible">
+                <strong>Show to deacons</strong>
+                <div class="text-muted" style="font-size:0.78rem;">Deacons will see their upcoming assignments on their portal.</div>
+              </label>
+            </div>
+          </div>
+        </div>
+        <div class="mt-3 d-flex gap-2">
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-save"></i> Save Settings
+          </button>
+          <% if (settings.draft_start_date || settings.draft_end_date || Object.keys(draftGrid).length > 0) { %>
+            <button type="button" class="btn btn-outline-danger"
+              onclick="if(confirm('Clear the entire upcoming schedule and all draft settings?')) document.getElementById('clearForm').submit();">
+              <i class="bi bi-trash"></i> Clear Draft
+            </button>
+          <% } %>
+        </div>
+      </form>
+      <form id="clearForm" method="POST" action="/admin/draft/clear" style="display:none;"></form>
+    </div>
+  </div>
+
+  <!-- Availability Status -->
+  <% if (settings.draft_start_date && settings.draft_end_date) { %>
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header fw-bold">
+        <i class="bi bi-person-check me-1"></i> Deacon Availability for Upcoming Period
+      </div>
+      <div class="card-body py-2">
+        <% const draftDeadlinePassed = settings.draft_input_deadline && new Date(settings.draft_input_deadline) < new Date(); %>
+        <% if (draftDeadlinePassed) { %>
+          <div class="alert alert-secondary mb-2 py-2">
+            <i class="bi bi-lock"></i> Availability deadline has passed. Deacons can no longer update their availability for this period.
+          </div>
+        <% } else if (settings.draft_input_deadline) { %>
+          <div class="alert alert-info mb-2 py-2">
+            <i class="bi bi-clock"></i> Availability window open until
+            <strong><%= new Date(settings.draft_input_deadline).toLocaleString('en-US', {timeZone:'America/New_York'}) %> ET</strong>.
+            Deacons can submit availability for
+            <strong><%= settings.draft_start_date %></strong> – <strong><%= settings.draft_end_date %></strong>.
+          </div>
+        <% } else { %>
+          <div class="alert alert-warning mb-2 py-2">
+            <i class="bi bi-exclamation-triangle"></i> No availability deadline set. Deacons can submit for this period at any time.
+          </div>
+        <% } %>
+        <p class="mb-0 text-muted small">
+          Deacons submit availability through their portal the same way as always — blackout dates for the upcoming range are stored automatically and used when generating the draft.
+          <% if (submittedDraftCount !== undefined) { %>
+            <strong><%= submittedDraftCount %> of <%= candidates.length %></strong> deacon<%= candidates.length !== 1 ? 's have' : ' has' %> submitted availability for this period.
+          <% } %>
+        </p>
+      </div>
+    </div>
+  <% } %>
+
+  <!-- Draft Schedule Grid -->
+  <% const dates = Object.keys(draftGrid).sort(); %>
+  <% if (!settings.draft_start_date) { %>
+    <div class="text-center py-5 text-muted">
+      <i class="bi bi-calendar2-plus display-1"></i>
+      <p class="mt-3 lead">No upcoming period configured yet.</p>
+      <p>Set a start date, end date, and deadline above, then click <strong>Generate Draft</strong>.</p>
+    </div>
+  <% } else if (dates.length === 0) { %>
+    <div class="text-center py-5 text-muted">
+      <i class="bi bi-lightning display-1"></i>
+      <p class="mt-3 lead">No draft assignments yet.</p>
+      <p>Period configured: <strong><%= settings.draft_start_date %></strong> – <strong><%= settings.draft_end_date %></strong>. Click <strong>Generate Draft</strong> when deacons have submitted availability.</p>
+    </div>
+  <% } else { %>
+    <div class="card border-0 shadow-sm">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="fw-bold"><i class="bi bi-table me-1"></i> Draft Schedule — <%= settings.draft_start_date %> to <%= settings.draft_end_date %></span>
+        <span class="badge bg-secondary"><%= dates.length %> Sunday<%= dates.length !== 1 ? 's' : '' %></span>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-bordered table-hover mb-0 schedule-table">
+            <thead class="table-dark">
+              <tr>
+                <th style="min-width: 140px;">Date</th>
+                <% for (const loc of locations) { %>
+                  <th style="min-width: 180px;"><%= loc.name %> (<%= loc.slots_per_day %> slots)</th>
+                <% } %>
+              </tr>
+            </thead>
+            <tbody>
+              <% for (const date of dates) { %>
+                <%
+                  const d = new Date(date + 'T00:00:00');
+                  const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
+                  const formatted = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                %>
+                <tr>
+                  <td class="fw-bold">
+                    <span class="badge bg-warning text-dark me-1"><%= dayName %></span>
+                    <%= formatted %>
+                  </td>
+                  <% for (const loc of locations) { %>
+                    <td>
+                      <% const assigned = (draftGrid[date] && draftGrid[date][loc.id]) || []; %>
+                      <% for (const a of assigned) { %>
+                        <div class="assignment-chip d-flex justify-content-between align-items-center mb-1">
+                          <span class="small"><%= a.candidate_name %></span>
+                          <button class="btn btn-sm p-0 text-danger ms-1" title="Remove"
+                            onclick="removeDraftAssignment(<%= a.id %>)">
+                            <i class="bi bi-x-circle-fill"></i>
+                          </button>
+                        </div>
+                      <% } %>
+                      <button class="btn btn-sm btn-outline-secondary add-assignment-btn"
+                        data-date="<%= date %>" data-location="<%= loc.id %>"
+                        onclick="openAddModal('<%= date %>', <%= loc.id %>, '<%= loc.name.replace(/'/g, "\\'") %>')">
+                        <i class="bi bi-plus"></i>
+                      </button>
+                    </td>
+                  <% } %>
+                </tr>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  <% } %>
+</div>
+
+<!-- Activate Modal -->
+<div class="modal fade" id="activateModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="POST" action="/admin/draft/activate">
+        <div class="modal-header" style="background:var(--mp-gold);color:#000;">
+          <h5 class="modal-title"><i class="bi bi-check2-circle me-2"></i>Activate Upcoming Schedule</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="alert alert-info py-2 mb-3">
+            <strong>What this does:</strong>
+            <ol class="mb-0 mt-1 small">
+              <li>Archives the current live schedule (if it has assignments)</li>
+              <li>Replaces the live schedule with this draft</li>
+              <li>Updates the active period dates to the draft dates</li>
+              <li>Clears the draft</li>
+            </ol>
+          </div>
+          <% if (liveAssignmentCount > 0) { %>
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Archive Label for Current Schedule <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" name="archive_label"
+                value="<%= settings.schedule_start_date ? (settings.schedule_start_date + ' – ' + (settings.schedule_end_date || '')) : '' %>"
+                placeholder='e.g. "Fall 2025" or "Sep–Nov 2025"' required>
+              <div class="form-text">The current live schedule (<%= liveAssignmentCount %> assignments) will be saved under this name before being replaced.</div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Notes <span class="text-muted fw-normal">(optional)</span></label>
+              <textarea class="form-control" name="archive_notes" rows="2" placeholder="Any context…"></textarea>
+            </div>
+          <% } else { %>
+            <input type="hidden" name="archive_label" value="">
+            <p class="text-muted small">The current live schedule has no assignments, so no archive will be created.</p>
+          <% } %>
+          <div class="alert alert-warning py-2 mb-0">
+            <i class="bi bi-exclamation-triangle"></i> <strong>This cannot be undone.</strong> The upcoming draft will become the live schedule.
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-warning">
+            <i class="bi bi-check2-circle"></i> Activate Now
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Add Draft Assignment Modal -->
+<div class="modal fade" id="addDraftModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Add Draft Assignment</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p id="addDraftInfo"></p>
+        <input type="hidden" id="addDraftDate">
+        <input type="hidden" id="addDraftLocation">
+        <div class="mb-3">
+          <label class="form-label">Select Candidate</label>
+          <select class="form-select" id="addDraftCandidate">
+            <% for (const c of candidates) { %>
+              <option value="<%= c.id %>"><%= c.name %> (<%= c.campus || 'McLean' %>)</option>
+            <% } %>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="addDraftAssignment()">Add</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+async function generateDraft() {
+  if (!confirm('This will clear and regenerate the draft schedule. Continue?')) return;
+  const btn = document.getElementById('btnGenerate');
+  const result = document.getElementById('generateResult');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Generating...';
+
+  try {
+    const resp = await fetch('/api/generate-draft-schedule', { method: 'POST' });
+    const data = await resp.json();
+    if (data.success) {
+      const b = data.balanceStats;
+      const unfilledNote = data.unfilledSlots > 0
+        ? '<br><strong class="text-warning">⚠ ' + data.unfilledSlots + ' slot(s) could not be filled.</strong>'
+        : '';
+      const balanceNote = b
+        ? '<br><small class="text-muted">Balance — min: ' + b.min + ', max: ' + b.max + ', avg: ' + b.avg + ', std dev: ' + b.stdDev + ' | ' + data.swapsDone + ' swap(s)</small>'
+        : '';
+      const histNote = (data.historicalPeriods && data.historicalPeriods.length > 0)
+        ? '<br><small class="text-muted"><i class="bi bi-clock-history"></i> Historical fairness: <strong>' + data.historicalPeriods.join(', ') + '</strong></small>'
+        : '';
+      result.innerHTML = '<div class="alert alert-success">✓ Draft generated: <strong>' + data.totalAssignments + '</strong> assignments across <strong>' + data.sundays + '</strong> Sundays.' + balanceNote + histNote + unfilledNote + '</div>';
+      setTimeout(() => location.reload(), 1500);
+    } else {
+      result.innerHTML = '<div class="alert alert-danger">' + data.error + '</div>';
+    }
+  } catch (err) {
+    result.innerHTML = '<div class="alert alert-danger">Failed to generate draft.</div>';
+  }
+  btn.disabled = false;
+  btn.innerHTML = '<i class="bi bi-lightning"></i> Generate Draft';
+}
+
+async function removeDraftAssignment(id) {
+  if (!confirm('Remove this draft assignment?')) return;
+  try {
+    await fetch('/api/draft-assignments/' + id + '/delete', { method: 'POST' });
+    location.reload();
+  } catch (err) {
+    alert('Failed to remove assignment.');
+  }
+}
+
+function openAddModal(date, locationId, locationName) {
+  document.getElementById('addDraftDate').value = date;
+  document.getElementById('addDraftLocation').value = locationId;
+  document.getElementById('addDraftInfo').textContent = 'Add to ' + locationName + ' on ' + date;
+  new bootstrap.Modal(document.getElementById('addDraftModal')).show();
+}
+
+async function addDraftAssignment() {
+  const date = document.getElementById('addDraftDate').value;
+  const locationId = document.getElementById('addDraftLocation').value;
+  const candidateId = document.getElementById('addDraftCandidate').value;
+
+  try {
+    const resp = await fetch('/api/draft-assignments/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ candidate_id: candidateId, location_id: locationId, date })
+    });
+    const data = await resp.json();
+    if (data.success) {
+      location.reload();
+    } else {
+      alert(data.error);
+    }
+  } catch (err) {
+    alert('Failed to add assignment.');
+  }
+}
+</script>
+
+<%- include('../partials/footer') %>

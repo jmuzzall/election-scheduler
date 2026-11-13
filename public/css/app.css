@@ -1,28 +1,295 @@
-/* ─── Landing Page ─────────────────────────────── */
-.landing-page {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
-  padding: 40px 0;
+/* ════════════════════════════════════════════════
+   McLean Presbyterian — Deacon Rotation Scheduler
+   Color tokens
+   ════════════════════════════════════════════════
+   --mp-navy   : #1B3A5C  primary / navbar
+   --mp-navy-d : #122840  darker hover
+   --mp-gold   : #C5963A  accent / CTA buttons
+   --mp-gold-d : #A87B2A  darker gold hover
+   --mp-cream  : #F7F4EE  warm off-white body bg
+   --mp-text   : #2D3748  body text
+   ════════════════════════════════════════════════ */
+
+:root {
+  --mp-navy:   #1B3A5C;
+  --mp-navy-d: #122840;
+  --mp-gold:   #C5963A;
+  --mp-gold-d: #A87B2A;
+  --mp-cream:  #F7F4EE;
+  --mp-text:   #2D3748;
 }
 
-/* ─── Cards ───────────────────────────────────── */
-.card {
+/* ─── Global ───────────────────────────────────── */
+body {
+  font-family: 'Open Sans', sans-serif;
+  color: var(--mp-text);
+  background-color: var(--mp-cream);
+}
+
+h1, h2, h3, h4, h5, .navbar-brand {
+  font-family: 'Merriweather', serif;
+}
+
+/* ─── Home — Navbar ────────────────────────────── */
+.home-navbar {
+  background-color: var(--mp-navy);
+  padding: 0.75rem 1rem;
+  position: sticky;
+  top: 0;
+  z-index: 1030;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+}
+
+.home-brand {
+  font-family: 'Merriweather', serif;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #fff !important;
+  letter-spacing: 0.01em;
+}
+
+.btn-admin-corner {
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.3rem 0.85rem;
+  border: 1.5px solid rgba(255,255,255,0.45);
+  color: rgba(255,255,255,0.85);
+  border-radius: 20px;
+  background: transparent;
+  transition: all 0.2s ease;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.btn-admin-corner:hover {
+  background: rgba(255,255,255,0.15);
+  color: #fff;
+  border-color: rgba(255,255,255,0.8);
+}
+
+/* ─── Home — Hero ──────────────────────────────── */
+.home-hero {
+  position: relative;
+  background-color: var(--mp-navy);
+  padding: 5rem 1rem 4rem;
+  overflow: hidden;
+}
+
+.home-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgba(255,255,255,0.03) 0,
+    rgba(255,255,255,0.03) 1px,
+    transparent 1px,
+    transparent 12px
+  );
+  pointer-events: none;
+}
+
+.home-hero-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(18,40,64,0.5) 0%, rgba(27,58,92,0.05) 100%);
+}
+
+.home-hero-content {
+  position: relative;
+  z-index: 1;
+}
+
+.home-title {
+  font-family: 'Merriweather', serif;
+  font-size: 2.4rem;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+.home-subtitle {
+  font-family: 'Open Sans', sans-serif;
+  font-size: 1rem;
+  color: rgba(255,255,255,0.72);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-weight: 500;
+  margin-top: 0.5rem;
+}
+
+.home-divider {
+  width: 56px;
+  height: 3px;
+  background: var(--mp-gold);
+  margin: 1.5rem auto 0;
+  border-radius: 2px;
+}
+
+/* ─── Home — Body ──────────────────────────────── */
+.home-body {
+  background: var(--mp-cream);
+  padding: 3rem 1rem 4rem;
+}
+
+.home-card {
+  border: none;
   border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 4px 24px rgba(27,58,92,0.10) !important;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.home-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 32px rgba(27,58,92,0.16) !important;
+}
+
+.home-card-icon {
+  font-size: 3.5rem;
+  color: var(--mp-navy);
+  line-height: 1;
+}
+
+.home-card-title {
+  font-family: 'Merriweather', serif;
+  color: var(--mp-navy);
+  font-size: 1.35rem;
+}
+
+/* ─── Gold CTA button ──────────────────────────── */
+.btn-gold {
+  background-color: var(--mp-gold);
+  border-color: var(--mp-gold);
+  color: #fff;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border-radius: 6px;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.btn-gold:hover, .btn-gold:focus {
+  background-color: var(--mp-gold-d);
+  border-color: var(--mp-gold-d);
+  color: #fff;
+}
+
+/* ─── Home — Footer ────────────────────────────── */
+.home-footer {
+  background: var(--mp-navy);
+  color: rgba(255,255,255,0.50);
+  padding: 1.25rem 1rem;
+  font-size: 0.82rem;
+}
+
+/* ─── Admin navbar ─────────────────────────────── */
+.navbar.navbar-dark.bg-dark {
+  background-color: var(--mp-navy) !important;
+}
+
+/* ─── Candidate navbar (green → navy) ─────────── */
+.navbar.navbar-dark.bg-success {
+  background-color: var(--mp-navy) !important;
+}
+
+/* ─── Navbar link states ───────────────────────── */
+.navbar .nav-link {
+  opacity: 0.82;
+  transition: opacity 0.2s, color 0.2s;
+}
+
+.navbar .nav-link:hover {
+  opacity: 1;
+  color: var(--mp-gold) !important;
+}
+
+.navbar .nav-link.active,
+.navbar .nav-link.active.fw-bold {
+  color: var(--mp-gold) !important;
+  opacity: 1;
+}
+
+/* ─── Bootstrap primary override ──────────────── */
+.btn-primary {
+  background-color: var(--mp-navy);
+  border-color: var(--mp-navy);
+}
+
+.btn-primary:hover, .btn-primary:focus {
+  background-color: var(--mp-navy-d);
+  border-color: var(--mp-navy-d);
+}
+
+.btn-outline-primary {
+  color: var(--mp-navy);
+  border-color: var(--mp-navy);
+}
+
+.btn-outline-primary:hover {
+  background-color: var(--mp-navy);
+  border-color: var(--mp-navy);
+  color: #fff;
+}
+
+/* ─── Bootstrap success override ──────────────── */
+.btn-success {
+  background-color: var(--mp-navy);
+  border-color: var(--mp-navy);
+}
+
+.btn-success:hover, .btn-success:focus {
+  background-color: var(--mp-navy-d);
+  border-color: var(--mp-navy-d);
+}
+
+.btn-outline-success {
+  color: var(--mp-navy);
+  border-color: var(--mp-navy);
+}
+
+.btn-outline-success:hover {
+  background-color: var(--mp-navy);
+  border-color: var(--mp-navy);
+  color: #fff;
+}
+
+/* Active state in btn-group (My Sundays toggle) */
+.btn-success.active {
+  background-color: var(--mp-gold) !important;
+  border-color: var(--mp-gold) !important;
+}
+
+.btn-outline-success.active {
+  background-color: var(--mp-gold) !important;
+  border-color: var(--mp-gold) !important;
+  color: #fff !important;
+}
+
+/* ─── Form focus ───────────────────────────────── */
+.form-control:focus,
+.form-select:focus {
+  border-color: var(--mp-gold);
+  box-shadow: 0 0 0 0.2rem rgba(197,150,58,0.22);
+}
+
+/* ─── Cards ────────────────────────────────────── */
+.card {
+  border-radius: 10px;
   transition: transform 0.2s ease;
 }
 
-.landing-page .card:hover {
-  transform: translateY(-4px);
+.card-header.bg-white {
+  border-bottom: 2px solid var(--mp-cream);
 }
 
-/* ─── Assignment Chips ────────────────────────── */
+/* ─── Assignment Chips ─────────────────────────── */
 .assignment-chip {
-  background: #e8f4fd;
+  background: #eef2f7;
   border-radius: 6px;
   padding: 4px 8px;
-  border: 1px solid #bee5eb;
+  border: 1px solid #cdd9e8;
 }
 
 .assignment-chip .btn {
@@ -30,7 +297,7 @@
   line-height: 1;
 }
 
-/* ─── Schedule Table ──────────────────────────── */
+/* ─── Schedule Table ───────────────────────────── */
 .schedule-table th {
   position: sticky;
   top: 0;
@@ -53,7 +320,7 @@
   opacity: 1;
 }
 
-/* ─── Calendar Popup (inside Bootstrap modal) ─── */
+/* ─── Calendar (flatpickr) ─────────────────────── */
 #calendar-container {
   display: flex;
   justify-content: center;
@@ -74,7 +341,6 @@
   font-size: 1.05rem;
 }
 
-/* Selected = unavailable Sundays shown in red */
 #calendar-container .flatpickr-day.selected {
   background: #e74c3c !important;
   border-color: #c0392b !important;
@@ -82,31 +348,53 @@
   font-weight: 700;
 }
 
-/* Disabled (non-Sunday) days */
 #calendar-container .flatpickr-day.flatpickr-disabled {
   color: #ccc !important;
   text-decoration: line-through;
 }
 
-/* Enabled (Sunday) days that are NOT selected */
 #calendar-container .flatpickr-day:not(.flatpickr-disabled):not(.prevMonthDay):not(.nextMonthDay):not(.selected) {
   font-weight: 600;
-  color: #2c3e50;
+  color: var(--mp-navy);
 }
 
-/* Make the modal calendar responsive on mobile */
 #calendarModal .modal-dialog {
   max-width: 440px;
 }
 
-/* ─── Responsive ──────────────────────────────── */
+/* ─── Candidate schedule highlight ────────────── */
+.my-row { background-color: #e8eef5 !important; }
+.my-name { font-weight: 700; color: var(--mp-navy); }
+tr.hidden-row { display: none; }
+
+/* ─── Alerts ───────────────────────────────────── */
+.alert {
+  border-radius: 10px;
+}
+
+/* ─── Countdown ────────────────────────────────── */
+#countdown {
+  font-size: 1.1em;
+  color: var(--mp-gold);
+}
+
+/* ─── Badges ───────────────────────────────────── */
+.badge {
+  font-weight: 500;
+}
+
+/* ─── Responsive ───────────────────────────────── */
 @media (max-width: 768px) {
-  .landing-page {
-    padding: 20px 0;
+  .home-title {
+    font-size: 1.6rem;
   }
 
-  .landing-page .display-4 {
-    font-size: 1.8rem;
+  .home-brand {
+    font-size: 0.82rem;
+  }
+
+  .home-hero {
+    padding: 3rem 1rem 2.5rem;
   }
 
   #calendar-container .flatpickr-day {
@@ -123,39 +411,4 @@
   .schedule-table {
     font-size: 0.85rem;
   }
-}
-
-/* ─── Alerts ──────────────────────────────────── */
-.alert {
-  border-radius: 10px;
-}
-
-/* ─── Countdown ───────────────────────────────── */
-#countdown {
-  font-size: 1.1em;
-  color: #e67e22;
-}
-
-/* ─── Badges ──────────────────────────────────── */
-.badge {
-  font-weight: 500;
-}
-
-/* ─── Form controls ───────────────────────────── */
-.form-control:focus,
-.form-select:focus {
-  border-color: #3498db;
-  box-shadow: 0 0 0 0.2rem rgba(52, 152, 219, 0.25);
-}
-
-/* ─── Navbar active state ─────────────────────── */
-.navbar .nav-link.active,
-.navbar .nav-link:hover {
-  opacity: 1;
-  font-weight: 600;
-}
-
-.navbar .nav-link {
-  opacity: 0.85;
-  transition: opacity 0.2s;
 }

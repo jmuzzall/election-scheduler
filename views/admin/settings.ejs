@@ -19,8 +19,9 @@
   <% } %>
 
   <div class="row g-4">
-    <!-- Schedule Date Range -->
-    <div class="col-md-8">
+
+    <!-- ── Schedule Configuration ───────────────── -->
+    <div class="col-12">
       <div class="card border-0 shadow-sm">
         <div class="card-header bg-white fw-bold">
           <i class="bi bi-calendar-range"></i> Schedule Configuration
@@ -28,40 +29,220 @@
         <div class="card-body">
           <form method="POST" action="/admin/settings">
             <div class="row g-3">
-              <div class="col-md-6">
+              <div class="col-md-4">
                 <label for="schedule_start_date" class="form-label">Schedule Start Date</label>
                 <input type="date" class="form-control" id="schedule_start_date" name="schedule_start_date"
                   value="<%= settings.schedule_start_date || '' %>">
                 <div class="form-text">First date of the scheduling period</div>
               </div>
-              <div class="col-md-6">
+              <div class="col-md-4">
                 <label for="schedule_end_date" class="form-label">Schedule End Date</label>
                 <input type="date" class="form-control" id="schedule_end_date" name="schedule_end_date"
                   value="<%= settings.schedule_end_date || '' %>">
                 <div class="form-text">Last date of the scheduling period</div>
               </div>
-              <div class="col-md-6">
+              <div class="col-md-4">
                 <label for="input_deadline" class="form-label">Input Deadline</label>
                 <input type="datetime-local" class="form-control" id="input_deadline" name="input_deadline"
                   value="<%= settings.input_deadline ? settings.input_deadline.replace(' ', 'T').substring(0, 16) : '' %>">
-                <div class="form-text">Candidates must submit availability before this date/time</div>
+                <div class="form-text">Candidates must submit before this date/time</div>
+              </div>
+            </div>
+              <div class="col-md-4">
+                <label for="lookback_window" class="form-label">Historical Fairness Lookback</label>
+                <div class="input-group">
+                  <input type="number" class="form-control" id="lookback_window" name="lookback_window"
+                    min="0" max="20" value="<%= settings.lookback_window || 0 %>" style="max-width:80px;">
+                  <select class="form-select" name="lookback_type">
+                    <option value="periods" <%= (settings.lookback_type || 'periods') === 'periods' ? 'selected' : '' %>>
+                      Most Recent Periods
+                    </option>
+                    <option value="months" <%= (settings.lookback_type === 'months') ? 'selected' : '' %>>
+                      Past Months
+                    </option>
+                  </select>
+                </div>
+                <div class="form-text">0 = disabled (current period only). Set to 1+ to factor in prior archived periods when scheduling.</div>
               </div>
             </div>
             <button type="submit" class="btn btn-primary mt-3">
               <i class="bi bi-check-lg"></i> Save Settings
             </button>
           </form>
+
+          <hr class="my-4">
+          <p class="fw-semibold mb-1"><i class="bi bi-megaphone"></i> Announce Availability Window</p>
+          <p class="text-muted small mb-3">
+            Send an email to all deacons with the scheduling period dates and a personal login link.
+          </p>
+          <button type="button" class="btn btn-outline-primary btn-sm"
+                  data-bs-toggle="modal" data-bs-target="#announceModal">
+            <i class="bi bi-megaphone"></i> Send Announcement to All Deacons
+          </button>
+
+          <hr class="my-4">
+          <p class="fw-semibold mb-1"><i class="bi bi-arrow-counterclockwise"></i> Reset Availability Submissions</p>
+          <p class="text-muted small mb-3">
+            Use this when opening a new availability round so you can track who has responded.
+            This clears the "submitted" flag for all deacons without affecting their blackout dates or assignments.
+          </p>
+          <form method="POST" action="/admin/reset-submissions"
+                onsubmit="return confirm('Reset submission tracking for all deacons? This cannot be undone.')">
+            <button type="submit" class="btn btn-outline-warning btn-sm">
+              <i class="bi bi-arrow-counterclockwise"></i> Reset All Submission Flags
+            </button>
+          </form>
+
+          <% if (settings.input_deadline) { %>
+            <hr class="my-3">
+            <p class="mb-2 fw-semibold"><i class="bi bi-bell"></i> Availability Reminder Emails</p>
+            <p class="text-muted small mb-3">
+              Reminders are sent automatically at <strong>48 hours</strong> and
+              <strong>24 hours</strong> before the deadline to candidates who have not yet submitted.
+              Use the buttons below to send immediately or to re-prompt deacons who never set up their account.
+            </p>
+            <div class="d-flex gap-2 flex-wrap">
+              <button class="btn btn-outline-warning btn-sm"
+                data-bs-toggle="modal" data-bs-target="#reminderModal">
+                <i class="bi bi-bell-fill"></i> Send Reminder Now
+              </button>
+              <button class="btn btn-outline-info btn-sm"
+                data-bs-toggle="modal" data-bs-target="#followupModal">
+                <i class="bi bi-person-exclamation"></i> Send Follow-up to Unactivated Accounts
+              </button>
+            </div>
+            <div id="reminderResult" class="mt-2"></div>
+            <div id="followupResult" class="mt-2"></div>
+          <% } else { %>
+            <p class="text-muted small mt-3 mb-0">
+              <i class="bi bi-info-circle"></i>
+              Set an input deadline above to enable automated reminder emails.
+            </p>
+          <% } %>
+
+          <hr class="my-3">
+          <p class="mb-2 fw-semibold"><i class="bi bi-calendar2-check"></i> Duty Reminder Emails</p>
+          <p class="text-muted small mb-2">
+            Automatically email assigned deacons as their service date approaches —
+            a heads-up notice and a closer reminder. Both are sent per assignment,
+            and deduped so each deacon receives each type only once.
+          </p>
+          <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" id="duty_reminder_enabled"
+              name="duty_reminder_enabled" role="switch"
+              onchange="toggleDutyReminderFields(this.checked)"
+              <%= settings.duty_reminder_enabled ? 'checked' : '' %>>
+            <label class="form-check-label fw-semibold" for="duty_reminder_enabled">
+              Enable automatic duty reminders
+            </label>
+          </div>
+          <div id="dutyReminderFields" class="row g-3 mb-3" style="<%= settings.duty_reminder_enabled ? '' : 'display:none;' %>">
+            <div class="col-md-4">
+              <label class="form-label">Days before — First reminder</label>
+              <input type="number" class="form-control" name="duty_reminder_days_first"
+                min="2" max="90" value="<%= settings.duty_reminder_days_first || 7 %>">
+              <div class="form-text">
+                "You're up next Sunday" notice sent this many days before the duty date.
+              </div>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Days before — Final reminder</label>
+              <input type="number" class="form-control" name="duty_reminder_days_final"
+                min="1" max="14" value="<%= settings.duty_reminder_days_final || 1 %>">
+              <div class="form-text">
+                Closer "your duty is this weekend" notice sent this many days before.
+              </div>
+            </div>
+          </div>
+          <% if (settings.duty_reminder_enabled) { %>
+            <button type="button" class="btn btn-outline-success btn-sm"
+              data-bs-toggle="modal" data-bs-target="#dutyReminderModal">
+              <i class="bi bi-send-check"></i> Send Duty Reminders Now
+            </button>
+            <div id="dutyReminderResult" class="mt-2"></div>
+          <% } %>
         </div>
       </div>
     </div>
 
-    <!-- Change Password -->
-    <div class="col-md-4">
+    <!-- ── Admin Users ───────────────────────────── -->
+    <div class="col-lg-7">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white fw-bold d-flex justify-content-between align-items-center">
+          <span><i class="bi bi-shield-lock"></i> Admin Users</span>
+          <div class="d-flex gap-2">
+            <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#inviteAdminModal">
+              <i class="bi bi-envelope-plus"></i> Invite by Email
+            </button>
+            <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addAdminModal">
+              <i class="bi bi-plus-lg"></i> Add Admin
+            </button>
+          </div>
+        </div>
+        <div class="card-body p-0">
+          <table class="table table-hover mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th class="text-center">Role</th>
+                <th class="text-end">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% for (const a of admins) { %>
+                <tr class="<%= !a.password_hash ? 'table-warning' : '' %>">
+                  <td>
+                    <%= a.name %>
+                    <% if (a.id === admin.id) { %>
+                      <span class="badge bg-secondary ms-1">You</span>
+                    <% } %>
+                  </td>
+                  <td class="text-muted small"><%= a.email %></td>
+                  <td class="text-center">
+                    <% if (a.is_super) { %>
+                      <span class="badge bg-danger">Super Admin</span>
+                    <% } else if (!a.password_hash) { %>
+                      <span class="badge bg-warning text-dark">Invited</span>
+                    <% } else { %>
+                      <span class="badge bg-primary">Admin</span>
+                    <% } %>
+                  </td>
+                  <td class="text-end">
+                    <% if (!a.is_super && a.id !== admin.id) { %>
+                      <% if (!a.password_hash) { %>
+                        <button class="btn btn-sm btn-outline-warning me-1"
+                          onclick="resendInvite('<%= a.name %>','<%= a.email %>')"
+                          title="Resend invitation email">
+                          <i class="bi bi-envelope-arrow-up"></i>
+                        </button>
+                      <% } %>
+                      <form method="POST" action="/admin/admins/<%= a.id %>/delete" class="d-inline"
+                        onsubmit="return confirm('Remove admin access for <%= a.name %>?')">
+                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Remove">
+                          <i class="bi bi-trash"></i>
+                        </button>
+                      </form>
+                    <% } else { %>
+                      <span class="text-muted small">—</span>
+                    <% } %>
+                  </td>
+                </tr>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Change My Password ───────────────────── -->
+    <div class="col-lg-5">
       <div class="card border-0 shadow-sm">
         <div class="card-header bg-white fw-bold">
-          <i class="bi bi-key"></i> Change Password
+          <i class="bi bi-key"></i> Change My Password
         </div>
         <div class="card-body">
+          <p class="text-muted small">Logged in as <strong><%= admin.email %></strong></p>
           <form method="POST" action="/admin/change-password">
             <div class="mb-3">
               <label for="current_password" class="form-label">Current Password</label>
@@ -69,7 +250,8 @@
             </div>
             <div class="mb-3">
               <label for="new_password" class="form-label">New Password</label>
-              <input type="password" class="form-control" id="new_password" name="new_password" required minlength="6">
+              <input type="password" class="form-control" id="new_password" name="new_password"
+                required minlength="6" placeholder="At least 6 characters">
             </div>
             <button type="submit" class="btn btn-warning w-100">
               <i class="bi bi-key"></i> Change Password
@@ -78,7 +260,345 @@
         </div>
       </div>
     </div>
+
+  </div><!-- /row -->
+</div>
+
+<!-- ── Send Reminder Modal ─────────────────────────── -->
+<div class="modal fade" id="reminderModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header" style="background:var(--mp-navy);color:#fff;">
+        <h5 class="modal-title"><i class="bi bi-bell-fill me-2"></i>Send Reminder Now</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small mb-3">
+          A reminder email will be sent to all deacons who have not yet submitted their
+          blackout dates. Each email will include a personal login link.
+        </p>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Custom Message <span class="text-muted fw-normal">(optional)</span></label>
+          <textarea class="form-control" id="reminderCustomMsg" rows="4"
+            placeholder="Add a personal note here — it will appear in the email above the login button. Leave blank to send the default message."></textarea>
+          <div class="form-text">Tip: use this for context like upcoming events, special instructions, or a personal appeal.</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-warning" id="sendRemindersBtn" onclick="sendRemindersNow()">
+          <i class="bi bi-send"></i> Send Reminders
+        </button>
+      </div>
+    </div>
   </div>
 </div>
+
+<!-- ── Follow-up Modal ─────────────────────────────── -->
+<div class="modal fade" id="followupModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header" style="background:#0d6efd;color:#fff;">
+        <h5 class="modal-title"><i class="bi bi-person-exclamation me-2"></i>Send Follow-up to Unactivated Accounts</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small mb-1">
+          This sends a <strong>separate email</strong> to deacons who received an invitation
+          but have <strong>never clicked their login link</strong> (no account set up yet) and
+          have also not submitted availability.
+        </p>
+        <p class="text-muted small mb-3">
+          Each email will include a fresh personal login link (valid 48 hours) so they can
+          access the portal without needing a password.
+        </p>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Custom Message <span class="text-muted fw-normal">(optional)</span></label>
+          <textarea class="form-control" id="followupCustomMsg" rows="4"
+            placeholder="Add a personal note here — it will appear in the follow-up email. Leave blank to use the default wording."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="sendFollowupBtn" onclick="sendFollowupNow()">
+          <i class="bi bi-send"></i> Send Follow-ups
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Duty Reminder Modal ─────────────────────────── -->
+<div class="modal fade" id="dutyReminderModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header" style="background:#198754;color:#fff;">
+        <h5 class="modal-title"><i class="bi bi-send-check me-2"></i>Send Duty Reminders Now</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small mb-3">
+          A schedule reminder will be sent to <strong>all deacons with upcoming assignments</strong>,
+          regardless of their reminder window. Each email shows their assigned date and location
+          and links to the portal.
+        </p>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Custom Message <span class="text-muted fw-normal">(optional)</span></label>
+          <textarea class="form-control" id="dutyReminderCustomMsg" rows="4"
+            placeholder="Add a personal note here — it will appear in each email. Leave blank to send the default message."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-success" id="sendDutyRemindersBtn" onclick="sendDutyRemindersNow()">
+          <i class="bi bi-send"></i> Send Reminders
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Invite Admin Modal ──────────────────────────── -->
+<div class="modal fade" id="inviteAdminModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="POST" action="/admin/admins/invite">
+        <div class="modal-header" style="background:var(--mp-navy);color:#fff;">
+          <h5 class="modal-title"><i class="bi bi-envelope-plus me-2"></i>Invite Admin by Email</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted small mb-3">
+            An email will be sent with a secure one-time link. The recipient clicks it
+            to choose their own password and activate their account.
+            The link expires in <strong>48 hours</strong>.
+          </p>
+          <div class="mb-3">
+            <label class="form-label">Full Name</label>
+            <input type="text" class="form-control" name="name" placeholder="e.g. Jane Smith" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Email Address</label>
+            <input type="email" class="form-control" name="email" placeholder="jane@example.com" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-send"></i> Send Invitation
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ── Add Admin Modal ─────────────────────────────── -->
+<div class="modal fade" id="addAdminModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="POST" action="/admin/admins/add">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-shield-plus"></i> Add Admin User</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Full Name</label>
+            <input type="text" class="form-control" name="name" placeholder="e.g. Jane Smith" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Email</label>
+            <input type="email" class="form-control" name="email" placeholder="jane@example.com" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Initial Password</label>
+            <input type="password" class="form-control" name="password"
+              placeholder="At least 6 characters" minlength="6" required>
+            <div class="form-text">Share this with the new admin — they can change it after logging in.</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-plus-lg"></i> Add Admin
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+function resendInvite(name, email) {
+  document.querySelector('#inviteAdminModal input[name="name"]').value = name;
+  document.querySelector('#inviteAdminModal input[name="email"]').value = email;
+  new bootstrap.Modal(document.getElementById('inviteAdminModal')).show();
+}
+
+async function sendRemindersNow() {
+  const btn = document.getElementById('sendRemindersBtn');
+  const result = document.getElementById('reminderResult');
+  const customMsg = document.getElementById('reminderCustomMsg').value.trim();
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Sending…';
+  result.innerHTML = '';
+
+  try {
+    const res  = await fetch('/api/send-reminders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ custom_message: customMsg })
+    });
+    const data = await res.json();
+    bootstrap.Modal.getInstance(document.getElementById('reminderModal')).hide();
+    if (data.success) {
+      result.innerHTML = `
+        <div class="alert alert-success py-2 mb-0">
+          <i class="bi bi-check-circle-fill me-1"></i>
+          Reminders sent to <strong>${data.sent}</strong> candidate(s) — each with a personal login link.
+          ${data.skipped > 0 ? `(${data.skipped} failed — check server logs)` : ''}
+          ${data.total === 0 ? '<br><small class="text-muted">All candidates have already submitted.</small>' : ''}
+        </div>`;
+    } else {
+      result.innerHTML = `<div class="alert alert-danger py-2 mb-0"><i class="bi bi-exclamation-triangle-fill me-1"></i>${data.error}</div>`;
+    }
+  } catch (err) {
+    result.innerHTML = `<div class="alert alert-danger py-2 mb-0">Request failed: ${err.message}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-send"></i> Send Reminders';
+  }
+}
+
+function toggleDutyReminderFields(enabled) {
+  document.getElementById('dutyReminderFields').style.display = enabled ? '' : 'none';
+}
+
+async function sendDutyRemindersNow() {
+  const btn = document.getElementById('sendDutyRemindersBtn');
+  const result = document.getElementById('dutyReminderResult');
+  const customMsg = document.getElementById('dutyReminderCustomMsg').value.trim();
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Sending…';
+  if (result) result.innerHTML = '';
+
+  try {
+    const res  = await fetch('/api/send-duty-reminders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ custom_message: customMsg })
+    });
+    const data = await res.json();
+    bootstrap.Modal.getInstance(document.getElementById('dutyReminderModal')).hide();
+    if (result) {
+      if (data.success) {
+        result.innerHTML = `
+          <div class="alert alert-success py-2 mb-0">
+            <i class="bi bi-check-circle-fill me-1"></i>
+            Duty reminder sent to <strong>${data.sent}</strong> assigned deacon(s).
+            ${data.total === 0 ? '<br><small class="text-muted">No upcoming assignments found.</small>' : ''}
+          </div>`;
+      } else {
+        result.innerHTML = `<div class="alert alert-danger py-2 mb-0"><i class="bi bi-exclamation-triangle-fill me-1"></i>${data.error}</div>`;
+      }
+    }
+  } catch (err) {
+    if (result) result.innerHTML = `<div class="alert alert-danger py-2 mb-0">Request failed: ${err.message}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-send"></i> Send Reminders';
+  }
+}
+
+async function sendFollowupNow() {
+  const btn = document.getElementById('sendFollowupBtn');
+  const result = document.getElementById('followupResult');
+  const customMsg = document.getElementById('followupCustomMsg').value.trim();
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Sending…';
+  result.innerHTML = '';
+
+  try {
+    const res  = await fetch('/api/send-followup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ custom_message: customMsg })
+    });
+    const data = await res.json();
+    bootstrap.Modal.getInstance(document.getElementById('followupModal')).hide();
+    if (data.success) {
+      result.innerHTML = `
+        <div class="alert alert-info py-2 mb-0">
+          <i class="bi bi-person-check-fill me-1"></i>
+          Follow-up sent to <strong>${data.sent}</strong> unactivated account(s).
+          ${data.skipped > 0 ? `(${data.skipped} failed — check server logs)` : ''}
+          ${data.total === 0 ? '<br><small class="text-muted">No unactivated accounts without submissions found.</small>' : ''}
+        </div>`;
+    } else {
+      result.innerHTML = `<div class="alert alert-danger py-2 mb-0"><i class="bi bi-exclamation-triangle-fill me-1"></i>${data.error}</div>`;
+    }
+  } catch (err) {
+    result.innerHTML = `<div class="alert alert-danger py-2 mb-0">Request failed: ${err.message}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-send"></i> Send Follow-ups';
+  }
+}
+</script>
+
+<!-- ── Announce Availability Modal ─────────────────────────────── -->
+<div class="modal fade" id="announceModal" tabindex="-1" aria-labelledby="announceModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header" style="background:#1B3A5C;color:#fff;">
+        <h5 class="modal-title" id="announceModalLabel">
+          <i class="bi bi-megaphone"></i> Notify Deacons — Availability Window Is Open
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST" action="/admin/announce-availability">
+        <div class="modal-body">
+          <p class="text-muted small mb-3">
+            An email will be sent to every deacon with the scheduling period dates and a personal login link.
+            Add an optional message below to provide any additional context.
+          </p>
+          <div class="mb-3">
+            <label for="announceCustomMsg" class="form-label fw-semibold">Custom message <span class="text-muted fw-normal">(optional)</span></label>
+            <textarea class="form-control" id="announceCustomMsg" name="custom_message" rows="5"
+              placeholder="e.g. Please submit your blackout dates by the deadline. Contact the deacon coordinator with any questions."></textarea>
+          </div>
+          <% if (settings && settings.schedule_start_date) { %>
+            <div class="alert alert-info py-2 small mb-0">
+              <i class="bi bi-info-circle"></i>
+              The email will automatically include the scheduling period
+              (<strong><%= settings.schedule_start_date %></strong> to <strong><%= settings.schedule_end_date %></strong>)<% if (settings.input_deadline) { %> and deadline (<strong><%= settings.input_deadline %></strong>)<% } %>.
+            </div>
+          <% } %>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+            <i class="bi bi-x-lg"></i> Skip for Now
+          </button>
+          <button type="submit" class="btn btn-primary" style="background:#1B3A5C;border-color:#1B3A5C;">
+            <i class="bi bi-send"></i> Send to All Deacons
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<% if (announce) { %>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    var modal = new bootstrap.Modal(document.getElementById('announceModal'), { backdrop: 'static' });
+    modal.show();
+  });
+</script>
+<% } %>
 
 <%- include('../partials/footer') %>

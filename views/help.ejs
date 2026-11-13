@@ -1,0 +1,437 @@
+<% const title = 'User Manual' %>
+<%- include('./partials/header') %>
+
+<% if (typeof admin !== 'undefined' && admin) { %>
+  <%- include('./partials/admin-nav') %>
+<% } else if (typeof candidate !== 'undefined' && candidate) { %>
+  <%- include('./partials/candidate-nav') %>
+<% } else { %>
+  <!-- minimal nav for unauthenticated access -->
+  <nav class="navbar navbar-dark" style="background:var(--mp-navy);">
+    <div class="container">
+      <a class="navbar-brand" href="/"><i class="bi bi-calendar-check"></i> Sunday Duty Deacon Rotation Scheduler</a>
+      <a class="btn btn-sm btn-outline-light" href="/">← Home</a>
+    </div>
+  </nav>
+<% } %>
+
+<div class="container-fluid mt-0" style="background:var(--mp-cream);min-height:100vh;">
+  <div class="row">
+
+    <!-- ── Sidebar TOC ──────────────────────────────── -->
+    <div class="col-lg-3 d-none d-lg-block py-4 px-4" style="position:sticky;top:0;height:100vh;overflow-y:auto;border-right:1px solid #dee2e6;">
+      <h6 class="text-uppercase text-muted fw-bold mb-3" style="font-size:.7rem;letter-spacing:.08em;">Contents</h6>
+      <nav class="nav flex-column small">
+        <a class="nav-link py-1 text-dark fw-semibold" href="#overview">Overview</a>
+        <div class="ms-2">
+          <a class="nav-link py-1 text-muted" href="#how-it-works">How It Works</a>
+          <a class="nav-link py-1 text-muted" href="#two-roles">Two Roles</a>
+        </div>
+
+        <a class="nav-link py-1 text-dark fw-semibold mt-2" href="#candidates">For Deacons</a>
+        <div class="ms-2">
+          <a class="nav-link py-1 text-muted" href="#cand-login">Logging In</a>
+          <a class="nav-link py-1 text-muted" href="#cand-blackouts">Submitting Blackout Dates</a>
+          <a class="nav-link py-1 text-muted" href="#cand-schedule">Viewing Your Schedule</a>
+          <a class="nav-link py-1 text-muted" href="#cand-swap">Proposing a Swap</a>
+          <a class="nav-link py-1 text-muted" href="#cand-approve">Approving / Declining a Swap</a>
+        </div>
+
+        <a class="nav-link py-1 text-dark fw-semibold mt-2" href="#admins">For Administrators</a>
+        <div class="ms-2">
+          <a class="nav-link py-1 text-muted" href="#admin-login">Logging In</a>
+          <a class="nav-link py-1 text-muted" href="#admin-dashboard">Dashboard</a>
+          <a class="nav-link py-1 text-muted" href="#admin-deacons">Managing Deacons</a>
+          <a class="nav-link py-1 text-muted" href="#admin-locations">Managing Locations</a>
+          <a class="nav-link py-1 text-muted" href="#admin-settings">Settings & Deadline</a>
+          <a class="nav-link py-1 text-muted" href="#admin-reminders">Availability Reminders</a>
+          <a class="nav-link py-1 text-muted" href="#admin-duty-reminders">Duty Reminders</a>
+          <a class="nav-link py-1 text-muted" href="#admin-sunday-reminders">Sunday Group Reminders</a>
+          <a class="nav-link py-1 text-muted" href="#admin-generate">Generating the Schedule</a>
+          <a class="nav-link py-1 text-muted" href="#admin-schedule">Editing the Schedule</a>
+          <a class="nav-link py-1 text-muted" href="#admin-export">Exporting to Excel</a>
+          <a class="nav-link py-1 text-muted" href="#admin-archives">Archives</a>
+          <a class="nav-link py-1 text-muted" href="#admin-admins">Managing Administrators</a>
+        </div>
+
+        <a class="nav-link py-1 text-dark fw-semibold mt-2" href="#faq">FAQ</a>
+      </nav>
+    </div>
+
+    <!-- ── Main content ────────────────────────────── -->
+    <div class="col-lg-9 py-4 px-4 px-lg-5" style="max-width:860px;">
+
+      <div class="d-flex align-items-center gap-3 mb-4">
+        <i class="bi bi-book display-5" style="color:var(--mp-navy);"></i>
+        <div>
+          <h1 class="mb-0" style="color:var(--mp-navy);">User Manual</h1>
+          <p class="text-muted mb-0">Sunday Duty Deacon Rotation Scheduler — McLean Presbyterian Church</p>
+        </div>
+      </div>
+
+      <hr>
+
+      <!-- ── Overview ── -->
+      <section id="overview" class="mb-5">
+        <h2 class="section-heading"><i class="bi bi-info-circle me-2"></i>Overview</h2>
+
+        <h5 id="how-it-works">How It Works</h5>
+        <p>The Sunday Duty Deacon Rotation Scheduler automates the process of assigning deacons to Sunday duty slots. The process follows three phases:</p>
+        <ol>
+          <li><strong>Availability collection</strong> — Each deacon logs in and marks any Sundays they cannot serve (blackout dates) within the scheduling window.</li>
+          <li><strong>Schedule generation</strong> — An administrator generates the schedule. The system assigns deacons to slots proportionally, giving priority to those with the fewest available dates to ensure no one is squeezed out.</li>
+          <li><strong>Swap management</strong> — After the schedule is published, deacons can propose swaps with one another. The other deacon must approve before any change takes effect.</li>
+        </ol>
+
+        <h5 id="two-roles" class="mt-4">Two Roles</h5>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <div class="card border-0 h-100" style="background:#f0f4f8;">
+              <div class="card-body">
+                <h6 class="fw-bold"><i class="bi bi-shield-lock me-1" style="color:var(--mp-navy);"></i> Administrator</h6>
+                <p class="small mb-0">Manages deacons, locations, and settings. Generates and edits the schedule. Sends reminder emails. Full access to all data.</p>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="card border-0 h-100" style="background:#f0f4f8;">
+              <div class="card-body">
+                <h6 class="fw-bold"><i class="bi bi-person me-1" style="color:var(--mp-navy);"></i> Deacon (Candidate)</h6>
+                <p class="small mb-0">Submits blackout dates, views their assigned Sundays, and proposes or responds to swap requests. Cannot see other deacons' contact details.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <hr>
+
+      <!-- ── For Deacons ── -->
+      <section id="candidates" class="mb-5">
+        <h2 class="section-heading"><i class="bi bi-person-check me-2"></i>For Deacons</h2>
+
+        <h5 id="cand-login">Logging In</h5>
+        <p>You will receive an email from the scheduling system with a <strong>secure login link</strong>. Click it to be taken directly to your portal — no password is required for the first login.</p>
+        <p>On subsequent visits, go to <strong>election-scheduler.fly.dev</strong>, click <strong>Deacon Portal</strong>, and enter your email address. If you have set a password, you will be prompted for it. If not, you can set one on the login screen.</p>
+        <div class="alert alert-info border-0 small">
+          <i class="bi bi-info-circle me-1"></i> If you forget your password, click <strong>"Forgot your password?"</strong> on the login screen to receive a reset link by email.
+        </div>
+
+        <h5 id="cand-blackouts" class="mt-4">Submitting Blackout Dates</h5>
+        <p>After logging in you will land on the <strong>My Availability</strong> page. This is where you tell the system which Sundays you <em>cannot</em> serve.</p>
+        <ol>
+          <li>Click <strong>"Open Calendar"</strong> to open the date picker.</li>
+          <li>Tap any Sunday you are <strong>not available</strong> — it will turn red.</li>
+          <li>Tap again to deselect a date.</li>
+          <li>Click <strong>"Done"</strong> to close the calendar.</li>
+          <li>Click <strong>"Save Availability"</strong> to submit your selections.</li>
+        </ol>
+        <div class="alert alert-warning border-0 small">
+          <i class="bi bi-exclamation-triangle me-1"></i>
+          <strong>Important:</strong> If you have no blackout dates, please still log in and click <strong>"Save Availability"</strong> with nothing selected. This tells the system you are available for all Sundays. If you do not respond before the deadline, you will be treated as available for all dates.
+        </div>
+        <p>You may update your submission any time before the deadline shown at the top of the page.</p>
+
+        <h5 id="cand-schedule" class="mt-4">Viewing Your Schedule</h5>
+        <p>Once the administrator generates the schedule, your assigned Sundays appear in two places:</p>
+        <ul>
+          <li><strong>My Availability page</strong> — a highlighted card at the top lists all your assigned dates as soon as you log in.</li>
+          <li><strong>View Schedule</strong> (nav bar) — shows the full schedule for all deacons. Your rows are highlighted in blue with a ⭐ star. Use the <strong>"My Sundays"</strong> button to filter to only your dates.</li>
+        </ul>
+
+        <h5 id="cand-swap" class="mt-4">Proposing a Swap</h5>
+        <p>If you need to trade a Sunday with another deacon:</p>
+        <ol>
+          <li>Go to <strong>View Schedule</strong>.</li>
+          <li>Find one of your assigned Sundays and click the <strong>⇄ Swap</strong> button on that row.</li>
+          <li>In the dialog that opens, select the other deacon's assignment you would like to trade for.</li>
+          <li>Optionally add a short message (e.g., "I have a family commitment that day").</li>
+          <li>Click <strong>"Send Swap Request"</strong>.</li>
+        </ol>
+        <p>The other deacon will receive an email notification and must log in to approve or decline. <strong>No change is made to the schedule until they approve.</strong></p>
+        <p>Your assignment shows a yellow <strong>"Pending"</strong> badge while the request is open. You can withdraw a pending request from the <strong>Swap Requests</strong> page.</p>
+
+        <h5 id="cand-approve" class="mt-4">Approving or Declining a Swap</h5>
+        <p>When someone requests a swap with you, you will receive an email and a yellow badge will appear on <strong>Swap Requests</strong> in the navigation bar.</p>
+        <ol>
+          <li>Click <strong>Swap Requests</strong> in the nav bar.</li>
+          <li>Review the <strong>Incoming Requests</strong> section — it shows what the other deacon is offering and what they are asking for in return.</li>
+          <li>Click <strong>Approve</strong> to accept (your schedules are immediately exchanged) or <strong>Decline</strong> to reject.</li>
+        </ol>
+        <p>The requester will receive an email notifying them of your decision. When a swap is <strong>approved</strong>, a notification email is also sent automatically to the scheduling administrators. You can review past swaps in the <strong>Recent History</strong> section on the same page.</p>
+      </section>
+
+      <hr>
+
+      <!-- ── For Administrators ── -->
+      <section id="admins" class="mb-5">
+        <h2 class="section-heading"><i class="bi bi-shield-lock me-2"></i>For Administrators</h2>
+
+        <h5 id="admin-login">Logging In</h5>
+        <p>Go to <strong>election-scheduler.fly.dev</strong> and click the small <strong>"Admin"</strong> button in the upper-right corner of the home page. Enter your email and password. If this is your first time logging in via an invitation link, you will have set your password when you accepted the invite.</p>
+        <div class="alert alert-info border-0 small">
+          <i class="bi bi-info-circle me-1"></i> If you forget your password, click <strong>"Forgot password?"</strong> on the admin login screen. Enter your email address and you will receive a reset link valid for one hour.
+        </div>
+
+        <h5 id="admin-dashboard" class="mt-4">Dashboard</h5>
+        <p>The dashboard gives you an at-a-glance view of the system:</p>
+        <ul>
+          <li><strong>Stat cards</strong> — total deacons, how many have submitted availability, locations, and total assignments.</li>
+          <li><strong>Full Schedule table</strong> — every assigned Sunday with deacon and location, sortable by date. Includes Export and Edit buttons.</li>
+          <li><strong>Assignments by Deacon</strong> — each deacon and their Sunday count.</li>
+        </ul>
+
+        <h5 id="admin-deacons" class="mt-4">Managing Deacons</h5>
+        <p>Go to <strong>Candidates</strong> in the admin navigation.</p>
+        <ul>
+          <li><strong>Add individually</strong> — click <strong>"Add Candidate"</strong>, enter name, email, and maximum shifts. The default maximum is 26 (effectively unlimited for a typical year).</li>
+          <li><strong>Bulk import</strong> — upload a CSV file with columns <code>Name</code>, <code>Email</code>, and optionally <code>Max Shifts</code>.</li>
+          <li><strong>Send login link</strong> — click the envelope icon next to a deacon's name to email them a magic login link.</li>
+          <li><strong>Edit or delete</strong> — use the pencil and trash icons. Deleting a deacon also removes their blackout dates and assignments.</li>
+          <li><strong>Export blackout dates</strong> — download an Excel file showing which Sundays each deacon marked as unavailable, grouped by date and by deacon.</li>
+        </ul>
+
+        <h5 id="admin-locations" class="mt-4">Managing Locations</h5>
+        <p>Go to <strong>Locations</strong> in the admin navigation. Each location represents a duty station (e.g., a specific door, section, or service). You can set the number of <strong>slots per Sunday</strong> for each location — if a location needs two deacons per week, set slots to 2.</p>
+
+        <h5 id="admin-settings" class="mt-4">Settings & Deadline</h5>
+        <p>Go to <strong>Settings</strong> in the admin navigation.</p>
+        <ul>
+          <li><strong>Schedule Start Date</strong> — the first Sunday of the duty period deacons will be assigned to.</li>
+          <li><strong>Schedule End Date</strong> — the last Sunday of the duty period.</li>
+          <li><strong>Input Deadline</strong> — the date and time by which deacons must submit their blackout dates. After this point, the portal locks and deacons who did not respond are treated as available for all Sundays.</li>
+          <li><strong>Duty Reminder Emails</strong> — enable automated per-deacon reminders as their assigned Sunday approaches (see <a href="#admin-duty-reminders">Duty Reminders</a> below).</li>
+        </ul>
+        <div class="alert alert-info border-0 small">
+          <i class="bi bi-lightbulb me-1"></i> Set the deadline a few days before you plan to generate the schedule, giving yourself time to follow up with anyone who hasn't responded.
+        </div>
+
+        <h5 id="admin-reminders" class="mt-4">Availability Reminders</h5>
+        <p>The system automatically emails all deacons who have <strong>not yet submitted</strong> their blackout dates at two points:</p>
+        <ul>
+          <li><strong>48 hours before the deadline</strong> — a standard reminder.</li>
+          <li><strong>24 hours before the deadline</strong> — a final reminder with "FINAL REMINDER" in the subject line.</li>
+        </ul>
+        <p>Each deacon receives each reminder only once. If you change the deadline, a fresh pair of reminders will be sent for the new date.</p>
+        <p>You can also send an <strong>immediate reminder</strong> at any time by clicking the <strong>"Send Reminder Now"</strong> button in Settings (visible once a deadline is set). Manual reminders are not tracked in the dedup log, so they won't interfere with the automated 48h/24h sends.</p>
+
+        <h5 id="admin-duty-reminders" class="mt-4">Duty Reminders <span class="badge bg-primary ms-1" style="font-size:.65rem;">Per-Deacon</span></h5>
+        <p>Once the schedule is generated, the system can automatically remind each deacon individually as their assigned Sunday approaches. Configure this in <strong>Settings → Duty Reminder Emails</strong>.</p>
+        <ul>
+          <li><strong>First reminder</strong> — sent when the assignment is within the configured number of days (default: 7 days). Subject: "Heads-Up: You Are Serving Next Sunday, [Date]".</li>
+          <li><strong>Final reminder</strong> — sent when the assignment is within the final window (default: 1 day). Subject: "Reminder: Your Sunday Duty Is Coming Up — [Date]".</li>
+        </ul>
+        <p>Each reminder is sent only once per assignment per type (deduped). Enable the feature and configure the day windows in Settings, then click <strong>"Send Duty Reminders Now"</strong> to send an immediate heads-up to all deacons with upcoming assignments. You can include an optional custom message with the manual send.</p>
+
+        <h5 id="admin-sunday-reminders" class="mt-4">Sunday Group Reminders <span class="badge bg-success ms-1" style="font-size:.65rem;">Weekly</span></h5>
+        <p>Go to <strong>Reminders</strong> in the admin navigation. This page controls a weekly group email sent to <em>all deacons serving the upcoming Sunday</em>, reminding them of their duty.</p>
+        <p>The email opens with:</p>
+        <blockquote class="blockquote small border-start border-3 ps-3 text-muted" style="border-color:var(--mp-gold)!important;">
+          <em>Dear [Deacon 1] and [Deacon 2], You are scheduled to serve on [Full Date]. Next week, [Deacon 3] and [Deacon 4] are scheduled to serve.</em>
+        </blockquote>
+        <p>Key controls on the Reminders page:</p>
+        <ul>
+          <li><strong>ACTIVE / PAUSED badge</strong> — shows whether automated sending is on. Click <strong>Activate</strong> or <strong>Pause</strong> to toggle it without leaving the page.</li>
+          <li><strong>Send Schedule</strong> — configure which day of the week and hour (Eastern Time) the reminder fires. Default: Thursday at 2:00 PM ET. The system checks every 15 minutes and fires once per upcoming Sunday.</li>
+          <li><strong>Email Template</strong> — set the subject line, optional extra body text (appended after the auto-generated opening), and the CC address list. Next-week deacons are CC'd automatically in addition to the configured list.</li>
+          <li><strong>Send Test</strong> — sends a preview email to any address using placeholder deacon names ("[TEST]" prefix, no CC).</li>
+          <li><strong>Send Now</strong> — immediately sends this week's reminder to all deacons scheduled for the upcoming Sunday. Records in the log so the automated scheduler won't send again for the same Sunday.</li>
+          <li><strong>Recent Reminders Sent</strong> — a log of the last five group reminders showing the Sunday date, send time, subject, and recipients.</li>
+        </ul>
+        <div class="alert alert-info border-0 small">
+          <i class="bi bi-info-circle me-1"></i> If next week has no deacons scheduled in the system, the next-week line will read "Next week's duty assignments have not yet been finalized."
+        </div>
+
+        <h5 id="admin-generate" class="mt-4">Generating the Schedule</h5>
+        <p>Go to <strong>Schedule</strong> in the admin navigation and click <strong>"Generate Schedule"</strong>.</p>
+        <div class="alert alert-warning border-0 small">
+          <i class="bi bi-exclamation-triangle me-1"></i> Generating a new schedule <strong>replaces the existing one</strong>. Do this before notifying deacons of their assignments, or be sure all pending swaps have been resolved first.
+        </div>
+        <p>The algorithm works as follows:</p>
+        <ol>
+          <li>For each Sunday slot, candidates are ranked by how much of their available capacity has been used (lowest percentage first).</li>
+          <li>When candidates are tied, the most constrained deacon (fewest available Sundays) is given priority so they are not squeezed out.</li>
+          <li>The algorithm avoids scheduling anyone on back-to-back Sundays where possible.</li>
+          <li>After the initial fill, an improvement pass runs up to 500 swaps to further balance the load between the most over- and under-utilized deacons.</li>
+        </ol>
+        <p>After generation, a summary shows the number of assignments, unfilled slots (if any), and balance statistics (min/max/average shifts per deacon).</p>
+        <p>If there are <strong>unfilled slots</strong>, it means not enough deacons were available for those Sundays. You can fill them manually using the assignment editing tools on the Schedule page.</p>
+
+        <h5 id="admin-schedule" class="mt-4">Editing the Schedule</h5>
+        <p>On the <strong>Schedule</strong> admin page you can make manual adjustments after generation:</p>
+        <ul>
+          <li><strong>Change a deacon</strong> — click the pencil icon on any assignment row and select a different deacon from the dropdown.</li>
+          <li><strong>Remove an assignment</strong> — click the trash icon on the assignment row.</li>
+          <li><strong>Add an assignment</strong> — use the <strong>"Add Assignment"</strong> form at the bottom of the page, selecting the date, location, and deacon.</li>
+        </ul>
+        <div class="alert alert-info border-0 small">
+          <i class="bi bi-info-circle me-1"></i> Manual edits take effect immediately in the live database. Deacons will see the updated schedule the next time they log in.
+        </div>
+
+        <h5 id="admin-export" class="mt-4">Exporting to Excel</h5>
+        <p>Two Excel exports are available:</p>
+        <ul>
+          <li><strong>Schedule export</strong> — from the Dashboard or Schedule page, click <strong>"Export Excel"</strong>. Downloads a spreadsheet with each Sunday as a row and each location as a column.</li>
+          <li><strong>Blackout dates export</strong> — from the Candidates page, click <strong>"Export Blackout Dates"</strong>. Contains two sheets: one grouped by date (showing who is unavailable each Sunday) and one by deacon (showing all dates each person blocked).</li>
+        </ul>
+
+        <h5 id="admin-archives" class="mt-4">Archives</h5>
+        <p>Go to <strong>Archives</strong> in the admin navigation. Archives let you preserve a completed schedule period before starting a new one.</p>
+        <ul>
+          <li><strong>Create an archive</strong> — click <strong>"Archive Current Schedule"</strong>, give it a label (e.g., "Fall 2026"), and optionally add notes. The current assignments, dates, and settings are saved as a permanent snapshot.</li>
+          <li><strong>View an archive</strong> — click any archived period to see the full assignment table from that cycle.</li>
+          <li><strong>Fairness lookback</strong> — the schedule generation algorithm can look back across archived periods to ensure deacons who served more recently or more frequently are deprioritized in the new cycle. Configure the lookback window in Settings.</li>
+        </ul>
+        <div class="alert alert-info border-0 small">
+          <i class="bi bi-lightbulb me-1"></i> Archive the current schedule before generating a new one so you always have a complete historical record.
+        </div>
+
+        <h5 id="admin-admins" class="mt-4">Managing Administrators</h5>
+        <p>Go to <strong>Settings → Admin Users</strong>. There are two ways to add an admin:</p>
+        <div class="row g-3 mt-1">
+          <div class="col-md-6">
+            <div class="card border-0 h-100" style="background:#f0f4f8;">
+              <div class="card-body small">
+                <h6 class="fw-bold"><i class="bi bi-envelope-plus me-1"></i> Invite by Email <span class="badge bg-primary ms-1" style="font-size:.65rem;">Recommended</span></h6>
+                <p class="mb-0">Enter the person's name and email. They receive a secure one-time link valid for 48 hours. They click it, choose their own password, and are immediately logged in. Their row shows <span class="badge bg-warning text-dark" style="font-size:.7rem;">Invited</span> until they accept.</p>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="card border-0 h-100" style="background:#f0f4f8;">
+              <div class="card-body small">
+                <h6 class="fw-bold"><i class="bi bi-plus-lg me-1"></i> Add Admin (manual)</h6>
+                <p class="mb-0">Set an initial password yourself and share it with the new admin. They should change it immediately after logging in via <strong>Settings → Change My Password</strong>.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="mt-3">To remove an admin, click the trash icon on their row. The <strong>Super Admin</strong> (the original account) cannot be deleted, and you cannot delete your own account.</p>
+        <p>To change your own password while logged in, use the <strong>Change My Password</strong> card on the Settings page. If you are locked out and cannot log in, use the <strong>"Forgot password?"</strong> link on the admin login screen to receive a reset link by email.</p>
+      </section>
+
+      <hr>
+
+      <!-- ── FAQ ── -->
+      <section id="faq" class="mb-5">
+        <h2 class="section-heading"><i class="bi bi-question-circle me-2"></i>Frequently Asked Questions</h2>
+
+        <div class="accordion accordion-flush" id="faqAccordion">
+
+          <div class="accordion-item border-bottom">
+            <h2 class="accordion-header">
+              <button class="accordion-button collapsed fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#faq1">
+                What happens if I miss the deadline to submit my blackout dates?
+              </button>
+            </h2>
+            <div id="faq1" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+              <div class="accordion-body small text-muted">
+                You will be treated as available for <em>all</em> Sundays in the scheduling period. The administrator may still adjust your assignments manually after the schedule is generated. Contact the administrator if you have a conflict that was not captured.
+              </div>
+            </div>
+          </div>
+
+          <div class="accordion-item border-bottom">
+            <h2 class="accordion-header">
+              <button class="accordion-button collapsed fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">
+                Can I change my blackout dates after submitting?
+              </button>
+            </h2>
+            <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+              <div class="accordion-body small text-muted">
+                Yes — you can update your submission as many times as you like before the deadline. After the deadline, the portal locks and changes must go through the administrator.
+              </div>
+            </div>
+          </div>
+
+          <div class="accordion-item border-bottom">
+            <h2 class="accordion-header">
+              <button class="accordion-button collapsed fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">
+                What does "Pending" mean on my schedule?
+              </button>
+            </h2>
+            <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+              <div class="accordion-body small text-muted">
+                A yellow "Pending" badge means there is an active swap request involving that assignment. The assignment cannot be changed until the request is approved, declined, or cancelled. Go to <strong>Swap Requests</strong> to manage it.
+              </div>
+            </div>
+          </div>
+
+          <div class="accordion-item border-bottom">
+            <h2 class="accordion-header">
+              <button class="accordion-button collapsed fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#faq4">
+                My magic link says it has expired. What do I do?
+              </button>
+            </h2>
+            <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+              <div class="accordion-body small text-muted">
+                Magic links expire after 24 hours and can only be used once. Ask the administrator to send you a new link from the Candidates page.
+              </div>
+            </div>
+          </div>
+
+          <div class="accordion-item border-bottom">
+            <h2 class="accordion-header">
+              <button class="accordion-button collapsed fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#faq5">
+                Why was I not scheduled even though I submitted my availability?
+              </button>
+            </h2>
+            <div id="faq5" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+              <div class="accordion-body small text-muted">
+                The most common reason is that all of your available Sundays were already filled by other deacons before the algorithm reached your turn, or there were more deacons than slots. The administrator can add you manually via the Schedule edit page.
+              </div>
+            </div>
+          </div>
+
+          <div class="accordion-item border-bottom">
+            <h2 class="accordion-header">
+              <button class="accordion-button collapsed fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#faq6">
+                [Admin] Can I regenerate the schedule after making manual edits?
+              </button>
+            </h2>
+            <div id="faq6" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+              <div class="accordion-body small text-muted">
+                Yes, but regenerating replaces <em>all</em> existing assignments, including any manual edits or approved swaps. Only regenerate if you intend to start fresh. It is best practice to generate once, then use the manual edit tools for any adjustments.
+              </div>
+            </div>
+          </div>
+
+          <div class="accordion-item border-bottom">
+            <h2 class="accordion-header">
+              <button class="accordion-button collapsed fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#faq7">
+                [Admin] Emails are not being sent. What do I check?
+              </button>
+            </h2>
+            <div id="faq7" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+              <div class="accordion-body small text-muted">
+                The system requires SMTP credentials to send real emails. Check that <code>SMTP_HOST</code>, <code>SMTP_USER</code>, <code>SMTP_PASS</code>, and <code>APP_URL</code> are set as environment variables on Fly.io (<code>flyctl secrets set KEY=VALUE -a election-scheduler</code>). In development mode (no SMTP configured), emails are printed to the server console instead of being sent.
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <div class="text-muted small text-center py-4 border-top">
+        Sunday Duty Deacon Rotation Scheduler &mdash; McLean Presbyterian Church
+      </div>
+
+    </div><!-- /main -->
+  </div><!-- /row -->
+</div>
+
+<style>
+  .section-heading {
+    color: var(--mp-navy);
+    border-bottom: 2px solid var(--mp-gold);
+    padding-bottom: .4rem;
+    margin-bottom: 1.2rem;
+  }
+  .accordion-button:not(.collapsed) {
+    color: var(--mp-navy);
+    background: #eef2f7;
+  }
+  .accordion-button:focus { box-shadow: none; }
+</style>
+
+<%- include('./partials/footer') %>

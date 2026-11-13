@@ -12,7 +12,7 @@
         <div class="card-body text-center">
           <i class="bi bi-people display-6 text-primary"></i>
           <h3 class="mt-2 mb-0"><%= stats.candidateCount %></h3>
-          <p class="text-muted mb-0">Candidates</p>
+          <p class="text-muted mb-0">Deacons</p>
         </div>
       </div>
     </div>
@@ -21,7 +21,7 @@
         <div class="card-body text-center">
           <i class="bi bi-check-circle display-6 text-success"></i>
           <h3 class="mt-2 mb-0"><%= stats.submittedCount %></h3>
-          <p class="text-muted mb-0">Submitted</p>
+          <p class="text-muted mb-0">Submitted Availability</p>
         </div>
       </div>
     </div>
@@ -45,10 +45,10 @@
     </div>
   </div>
 
-  <!-- Settings Summary -->
-  <div class="row g-3">
+  <div class="row g-4 mb-4">
+    <!-- Settings Summary -->
     <div class="col-md-6">
-      <div class="card border-0 shadow-sm">
+      <div class="card border-0 shadow-sm h-100">
         <div class="card-header bg-white fw-bold">
           <i class="bi bi-gear"></i> Current Settings
         </div>
@@ -80,15 +80,16 @@
       </div>
     </div>
 
+    <!-- Quick Actions -->
     <div class="col-md-6">
-      <div class="card border-0 shadow-sm">
+      <div class="card border-0 shadow-sm h-100">
         <div class="card-header bg-white fw-bold">
           <i class="bi bi-lightning"></i> Quick Actions
         </div>
         <div class="card-body">
           <div class="d-grid gap-2">
             <a href="/admin/candidates" class="btn btn-outline-primary">
-              <i class="bi bi-people"></i> Manage Candidates
+              <i class="bi bi-people"></i> Manage Deacons
             </a>
             <a href="/admin/locations" class="btn btn-outline-primary">
               <i class="bi bi-geo-alt"></i> Manage Locations
@@ -101,6 +102,103 @@
       </div>
     </div>
   </div>
+
+  <% if (allAssignments.length > 0) { %>
+  <!-- ── Schedule Summary ─────────────────────────── -->
+  <div class="row g-4">
+
+    <!-- By Deacon -->
+    <div class="col-lg-4">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header fw-bold" style="background:var(--mp-navy);color:#fff;">
+          <i class="bi bi-person-lines-fill"></i> Assignments by Deacon
+        </div>
+        <div class="card-body p-0">
+          <table class="table table-hover table-sm mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Deacon</th>
+                <th class="text-center">Sundays</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% for (const c of scheduleByCandidate) { %>
+                <tr>
+                  <td><%= c.name %></td>
+                  <td class="text-center">
+                    <% if (c.shift_count > 0) { %>
+                      <span class="badge bg-success"><%= c.shift_count %></span>
+                    <% } else { %>
+                      <span class="text-muted small">—</span>
+                    <% } %>
+                  </td>
+                </tr>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- By Date -->
+    <div class="col-lg-8">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header fw-bold" style="background:var(--mp-navy);color:#fff;">
+          <i class="bi bi-calendar3"></i> Full Schedule
+        </div>
+        <div class="card-body p-0">
+          <div style="max-height:420px;overflow-y:auto;">
+            <table class="table table-hover table-sm mb-0">
+              <thead class="table-light sticky-top">
+                <tr>
+                  <th>Date</th>
+                  <th>Location</th>
+                  <th>Deacon</th>
+                </tr>
+              </thead>
+              <tbody>
+                <%
+                  let lastDate = null;
+                  for (const a of allAssignments) {
+                    const d = new Date(a.date + 'T00:00:00');
+                    const formatted = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+                    const isNewDate = a.date !== lastDate;
+                    lastDate = a.date;
+                %>
+                  <tr class="<%= isNewDate ? 'table-active' : '' %>">
+                    <td class="<%= isNewDate ? 'fw-bold' : 'text-muted' %>">
+                      <% if (isNewDate) { %>
+                        <span class="badge bg-primary me-1">Sun</span><%= formatted %>
+                      <% } %>
+                    </td>
+                    <td><small><%= a.location_name %></small></td>
+                    <td><%= a.candidate_name %></td>
+                  </tr>
+                <% } %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card-footer text-end">
+          <a href="/admin/schedule" class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-pencil-square"></i> Edit Schedule
+          </a>
+          <a href="/api/export-schedule" class="btn btn-sm btn-outline-success ms-2">
+            <i class="bi bi-file-earmark-excel"></i> Export Excel
+          </a>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <% } else { %>
+    <div class="alert alert-info border-0 shadow-sm">
+      <i class="bi bi-calendar-x me-2"></i>
+      No schedule has been generated yet.
+      <a href="/admin/schedule" class="alert-link">Generate one now →</a>
+    </div>
+  <% } %>
+
 </div>
 
 <%- include('../partials/footer') %>
