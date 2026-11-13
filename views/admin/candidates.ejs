@@ -38,6 +38,13 @@
             <div class="mb-2">
               <input type="number" class="form-control" name="max_shifts" placeholder="Max Shifts" value="26" min="1">
             </div>
+            <div class="mb-2">
+              <select class="form-select" name="campus" aria-label="Campus">
+                <% for (const cp of campuses) { %>
+                  <option value="<%= cp %>"><%= cp %></option>
+                <% } %>
+              </select>
+            </div>
             <button type="submit" class="btn btn-primary w-100">
               <i class="bi bi-plus-lg"></i> Add
             </button>
@@ -60,7 +67,7 @@
             </button>
           </form>
           <p class="text-muted small mt-2 mb-0">
-            CSV format: <code>Name, Email, Max Shifts</code>
+            CSV format: <code>Name, Email, Max Shifts, Campus</code>. Campus is McLean or Herndon; blank means McLean.
           </p>
         </div>
       </div>
@@ -114,6 +121,7 @@
                   <tr>
                     <th>Name</th>
                     <th>Email</th>
+                    <th>Campus</th>
                     <th class="text-center">Max Shifts</th>
                     <th class="text-center">Submitted</th>
                     <th class="text-end">Actions</th>
@@ -126,6 +134,7 @@
                         <span class="candidate-name" data-id="<%= c.id %>"><%= c.name %></span>
                       </td>
                       <td class="text-muted small"><%= c.email %></td>
+                      <td><span class="badge <%= c.campus === 'Herndon' ? 'bg-info text-dark' : 'bg-light text-dark border' %>"><%= c.campus || 'McLean' %></span></td>
                       <td class="text-center"><%= c.max_shifts %></td>
                       <td class="text-center">
                         <% if (c.has_submitted_input) { %>
@@ -141,7 +150,7 @@
                         </button>
                         <button class="btn btn-sm btn-outline-secondary" title="Edit"
                           data-bs-toggle="modal" data-bs-target="#editModal"
-                          onclick="openEditModal(<%= c.id %>, '<%= c.name.replace(/'/g, "\\'") %>', '<%= c.email %>', <%= c.max_shifts %>)">
+                          onclick="openEditModal(<%= c.id %>, '<%= c.name.replace(/'/g, "\\'") %>', '<%= c.email %>', <%= c.max_shifts %>, '<%= c.campus || 'McLean' %>')">
                           <i class="bi bi-pencil"></i>
                         </button>
                         <form method="POST" action="/admin/candidates/<%= c.id %>/delete" class="d-inline"
@@ -185,6 +194,15 @@
             <label class="form-label">Max Shifts</label>
             <input type="number" class="form-control" name="max_shifts" id="editMaxShifts" min="1" required>
           </div>
+          <div class="mb-3">
+            <label class="form-label" for="editCampus">Campus</label>
+            <select class="form-select" name="campus" id="editCampus">
+              <% for (const cp of campuses) { %>
+                <option value="<%= cp %>"><%= cp %></option>
+              <% } %>
+            </select>
+            <div class="form-text">The scheduler only assigns this deacon to locations at this campus.</div>
+          </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -196,11 +214,12 @@
 </div>
 
 <script>
-function openEditModal(id, name, email, maxShifts) {
+function openEditModal(id, name, email, maxShifts, campus) {
   document.getElementById('editForm').action = '/admin/candidates/' + id + '/edit';
   document.getElementById('editName').value = name;
   document.getElementById('editEmail').value = email;
   document.getElementById('editMaxShifts').value = maxShifts;
+  document.getElementById('editCampus').value = campus;
 }
 
 async function sendMagicLink(id, email) {

@@ -173,7 +173,7 @@
           <label class="form-label">Select Candidate</label>
           <select class="form-select" id="addCandidate">
             <% for (const c of candidates) { %>
-              <option value="<%= c.id %>"><%= c.name %></option>
+              <option value="<%= c.id %>"><%= c.name %> (<%= c.campus || 'McLean' %>)</option>
             <% } %>
           </select>
         </div>

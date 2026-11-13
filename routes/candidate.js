@@ -6,6 +6,7 @@ const db = require('../db');
 const { requireCandidate } = require('../middleware/auth');
 const mailer = require('../services/mailer');
 const { generateScheduleBuffer } = require('../services/scheduler');
+const { campusOf } = require('../services/campus');
 
 const SWAP_NOTIFY_EMAILS = (process.env.SWAP_NOTIFY_EMAILS || '')
   .split(',')
@@ -275,10 +276,11 @@ router.get('/schedule', requireCandidate, (req, res) => {
   const meId = req.session.candidate.id;
   const settings = db.queryOne('SELECT * FROM system_settings WHERE id = 1');
   const locations = db.queryAll('SELECT * FROM locations ORDER BY name');
+  const myCampus = campusOf(db.queryOne('SELECT campus FROM candidates WHERE id = ?', [meId]));
 
   const assignments = db.queryAll(`
     SELECT a.id, a.date, a.candidate_id, a.location_id,
-           c.name AS candidate_name, l.name AS location_name
+           c.name AS candidate_name, l.name AS location_name, l.campus AS location_campus
     FROM assignments a
     JOIN candidates c ON a.candidate_id = c.id
     JOIN locations l ON a.location_id = l.id
@@ -316,7 +318,7 @@ router.get('/schedule', requireCandidate, (req, res) => {
         location_name: a.location_name,
         hasPendingSwap: pendingAssignmentIds.has(a.id)
       });
-    } else {
+    } else if (campusOf({ campus: a.location_campus }) === myCampus) {
       otherAssignments.push({
         id: a.id, date: a.date,
         candidate_name: a.candidate_name,
@@ -411,13 +413,16 @@ router.post('/swaps/propose', requireCandidate, async (req, res) => {
   const redirect = (err) => res.redirect('/candidate/swaps?error=' + encodeURIComponent(err));
 
   // Verify both assignments exist
-  const myA   = db.queryOne('SELECT a.*, l.name AS location_name FROM assignments a JOIN locations l ON a.location_id=l.id WHERE a.id=?', [my_assignment_id]);
-  const theirA = db.queryOne('SELECT a.*, l.name AS location_name, c.name AS candidate_name, c.email AS candidate_email FROM assignments a JOIN locations l ON a.location_id=l.id JOIN candidates c ON a.candidate_id=c.id WHERE a.id=?', [their_assignment_id]);
+  const myA   = db.queryOne('SELECT a.*, l.name AS location_name, l.campus AS location_campus FROM assignments a JOIN locations l ON a.location_id=l.id WHERE a.id=?', [my_assignment_id]);
+  const theirA = db.queryOne('SELECT a.*, l.name AS location_name, l.campus AS location_campus, c.name AS candidate_name, c.email AS candidate_email FROM assignments a JOIN locations l ON a.location_id=l.id JOIN candidates c ON a.candidate_id=c.id WHERE a.id=?', [their_assignment_id]);
 
   if (!myA)    return redirect('Your assignment was not found.');
   if (!theirA) return redirect('The other assignment was not found.');
   if (myA.candidate_id !== meId)   return redirect('That is not your assignment.');
   if (theirA.candidate_id === meId) return redirect('You cannot swap with yourself.');
+  if (campusOf({ campus: myA.location_campus }) !== campusOf({ campus: theirA.location_campus })) {
+    return redirect('You can only swap with a deacon serving at the same campus.');
+  }
 
   // Check no pending swap already involves these two assignments
   const conflict = db.queryOne(

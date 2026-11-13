@@ -1,4 +1,5 @@
 const db = require('../db');
+const { CAMPUSES, campusOf } = require('./campus');
 
 // ─── Date helpers ───────────────────────────────────────────────────────────
 
@@ -196,8 +197,9 @@ function _runCore(startDate, endDate, settings, targetTable) {
 
     for (const location of locations) {
       let slotsRemaining = location.slots_per_day;
+      const pool = candidates.filter(c => campusOf(c) === campusOf(location));
 
-      for (const c of byUtilization(candidates)) {
+      for (const c of byUtilization(pool)) {
         if (slotsRemaining <= 0) break;
         if (blackoutSet.has(`${c.id}-${sunday}`)) continue;
         if (dailyAssigned[sunday].has(c.id)) continue;
@@ -208,7 +210,7 @@ function _runCore(startDate, endDate, settings, targetTable) {
       }
 
       if (slotsRemaining > 0) {
-        for (const c of byUtilization(candidates)) {
+        for (const c of byUtilization(pool)) {
           if (slotsRemaining <= 0) break;
           if (blackoutSet.has(`${c.id}-${sunday}`)) continue;
           if (dailyAssigned[sunday].has(c.id)) continue;
@@ -219,7 +221,7 @@ function _runCore(startDate, endDate, settings, targetTable) {
       }
 
       if (slotsRemaining > 0) {
-        const overCap = candidates
+        const overCap = pool
           .filter(c =>
             !blackoutSet.has(`${c.id}-${sunday}`) &&
             !dailyAssigned[sunday].has(c.id) &&
@@ -242,39 +244,45 @@ function _runCore(startDate, endDate, settings, targetTable) {
   let swapsDone = 0;
   const sundayIndexMap = Object.fromEntries(sundays.map((s, i) => [s, i]));
 
-  for (let iter = 0; iter < MAX_SWAPS; iter++) {
-    const ranked = [...candidates].sort((a, b) => compositeRatio(b) - compositeRatio(a));
-    const donor = ranked[0];
-    const recipient = ranked.slice(1).reverse().find(c => shiftCounts[c.id] < c.max_shifts);
+  // Balance within each campus; a Herndon shift can only move to another Herndon deacon.
+  for (const campus of CAMPUSES) {
+    const campusPool = candidates.filter(c => campusOf(c) === campus);
+    if (campusPool.length < 2) continue;
 
-    if (!recipient) break;
-    if (compositeRatio(donor) - compositeRatio(recipient) < 0.05) break;
+    for (let iter = 0; iter < MAX_SWAPS; iter++) {
+      const ranked = [...campusPool].sort((a, b) => compositeRatio(b) - compositeRatio(a));
+      const donor = ranked[0];
+      const recipient = ranked.slice(1).reverse().find(c => shiftCounts[c.id] < c.max_shifts);
 
-    const swappable = allAssignments.find(a => {
-      if (a.candidate_id !== donor.id) return false;
-      const si = sundayIndexMap[a.date];
-      if (blackoutSet.has(`${recipient.id}-${a.date}`)) return false;
-      if (dailyAssigned[a.date].has(recipient.id)) return false;
-      if (sundays[si - 1] && dailyAssigned[sundays[si - 1]] && dailyAssigned[sundays[si - 1]].has(recipient.id)) return false;
-      if (sundays[si + 1] && dailyAssigned[sundays[si + 1]] && dailyAssigned[sundays[si + 1]].has(recipient.id)) return false;
-      return true;
-    });
+      if (!recipient) break;
+      if (compositeRatio(donor) - compositeRatio(recipient) < 0.05) break;
 
-    if (!swappable) break;
+      const swappable = allAssignments.find(a => {
+        if (a.candidate_id !== donor.id) return false;
+        const si = sundayIndexMap[a.date];
+        if (blackoutSet.has(`${recipient.id}-${a.date}`)) return false;
+        if (dailyAssigned[a.date].has(recipient.id)) return false;
+        if (sundays[si - 1] && dailyAssigned[sundays[si - 1]] && dailyAssigned[sundays[si - 1]].has(recipient.id)) return false;
+        if (sundays[si + 1] && dailyAssigned[sundays[si + 1]] && dailyAssigned[sundays[si + 1]].has(recipient.id)) return false;
+        return true;
+      });
 
-    const si = sundayIndexMap[swappable.date];
-    dailyAssigned[swappable.date].delete(donor.id);
-    dailyAssigned[swappable.date].add(recipient.id);
-    shiftCounts[donor.id]--;
-    shiftCounts[recipient.id]++;
-    swappable.candidate_id = recipient.id;
+      if (!swappable) break;
 
-    lastServedIndex[donor.id] = allAssignments
-      .filter(a => a.candidate_id === donor.id)
-      .reduce((max, a) => Math.max(max, sundayIndexMap[a.date]), -99);
-    lastServedIndex[recipient.id] = Math.max(lastServedIndex[recipient.id], si);
+      const si = sundayIndexMap[swappable.date];
+      dailyAssigned[swappable.date].delete(donor.id);
+      dailyAssigned[swappable.date].add(recipient.id);
+      shiftCounts[donor.id]--;
+      shiftCounts[recipient.id]++;
+      swappable.candidate_id = recipient.id;
 
-    swapsDone++;
+      lastServedIndex[donor.id] = allAssignments
+        .filter(a => a.candidate_id === donor.id)
+        .reduce((max, a) => Math.max(max, sundayIndexMap[a.date]), -99);
+      lastServedIndex[recipient.id] = Math.max(lastServedIndex[recipient.id], si);
+
+      swapsDone++;
+    }
   }
 
   console.log(`[Scheduler → ${targetTable}] ${allAssignments.length} assignments, ${swapsDone} swaps, ${unfilledSlots} unfilled.`);

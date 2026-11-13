@@ -8,6 +8,7 @@ const path = require('path');
 const db = require('../db');
 const { requireAdmin } = require('../middleware/auth');
 const mailer = require('../services/mailer');
+const { CAMPUSES, normalizeCampus } = require('../services/campus');
 
 // Multer config for CSV uploads
 const upload = multer({
@@ -440,15 +441,15 @@ router.post('/admins/:id/delete', requireAdmin, (req, res) => {
 router.get('/candidates', requireAdmin, (req, res) => {
   const candidates = db.queryAll('SELECT * FROM candidates ORDER BY name');
   const settings = db.queryOne('SELECT * FROM system_settings WHERE id = 1');
-  res.render('admin/candidates', { candidates, settings, success: req.query.success || null, error: req.query.error || null });
+  res.render('admin/candidates', { candidates, settings, campuses: CAMPUSES, success: req.query.success || null, error: req.query.error || null });
 });
 
 router.post('/candidates/add', requireAdmin, (req, res) => {
-  const { name, email, max_shifts } = req.body;
+  const { name, email, max_shifts, campus } = req.body;
 
   try {
-    db.run('INSERT INTO candidates (name, email, max_shifts) VALUES (?, ?, ?)',
-      [name.trim(), email.trim().toLowerCase(), parseInt(max_shifts) || 26]);
+    db.run('INSERT INTO candidates (name, email, max_shifts, campus) VALUES (?, ?, ?, ?)',
+      [name.trim(), email.trim().toLowerCase(), parseInt(max_shifts) || 26, normalizeCampus(campus)]);
     res.redirect('/admin/candidates?success=Candidate added successfully.');
   } catch (err) {
     if (err.message && err.message.includes('UNIQUE')) {
@@ -552,6 +553,7 @@ router.post('/candidates/upload', requireAdmin, (req, res) => {
         const name      = col(row, 'Name', 'Full Name', 'FullName', 'First Name');
         const email     = col(row, 'Email', 'Email Address', 'E-mail');
         const maxShifts = parseInt(col(row, 'Max Shifts', 'max_shifts', 'MaxShifts') || '26') || 26;
+        const campus    = normalizeCampus(col(row, 'Campus', 'Location', 'Site'));
 
         if (!name || !email) {
           const label = name || email || `row ${i + 2}`;
@@ -563,8 +565,8 @@ router.post('/candidates/upload', requireAdmin, (req, res) => {
         }
 
         try {
-          db.run('INSERT INTO candidates (name, email, max_shifts) VALUES (?, ?, ?)',
-            [name.trim(), email.trim().toLowerCase(), maxShifts]);
+          db.run('INSERT INTO candidates (name, email, max_shifts, campus) VALUES (?, ?, ?, ?)',
+            [name.trim(), email.trim().toLowerCase(), maxShifts, campus]);
           added++;
         } catch (e) {
           duplicates.push(name.trim());
@@ -593,11 +595,11 @@ router.post('/candidates/upload', requireAdmin, (req, res) => {
 });
 
 router.post('/candidates/:id/edit', requireAdmin, (req, res) => {
-  const { name, email, max_shifts } = req.body;
+  const { name, email, max_shifts, campus } = req.body;
 
   try {
-    db.run('UPDATE candidates SET name = ?, email = ?, max_shifts = ? WHERE id = ?',
-      [name.trim(), email.trim().toLowerCase(), parseInt(max_shifts) || 26, req.params.id]);
+    db.run('UPDATE candidates SET name = ?, email = ?, max_shifts = ?, campus = ? WHERE id = ?',
+      [name.trim(), email.trim().toLowerCase(), parseInt(max_shifts) || 26, normalizeCampus(campus), req.params.id]);
     res.redirect('/admin/candidates?success=Candidate updated.');
   } catch (err) {
     res.redirect('/admin/candidates?error=' + encodeURIComponent(err.message));
@@ -615,15 +617,15 @@ router.post('/candidates/:id/delete', requireAdmin, (req, res) => {
 // ─── Locations ─────────────────────────────────────
 router.get('/locations', requireAdmin, (req, res) => {
   const locations = db.queryAll('SELECT * FROM locations ORDER BY name');
-  res.render('admin/locations', { locations, success: req.query.success || null, error: req.query.error || null });
+  res.render('admin/locations', { locations, campuses: CAMPUSES, success: req.query.success || null, error: req.query.error || null });
 });
 
 router.post('/locations/add', requireAdmin, (req, res) => {
-  const { name, slots_per_day } = req.body;
+  const { name, slots_per_day, campus } = req.body;
 
   try {
-    db.run('INSERT INTO locations (name, slots_per_day) VALUES (?, ?)',
-      [name.trim(), parseInt(slots_per_day) || 1]);
+    db.run('INSERT INTO locations (name, slots_per_day, campus) VALUES (?, ?, ?)',
+      [name.trim(), parseInt(slots_per_day) || 1, normalizeCampus(campus)]);
     res.redirect('/admin/locations?success=Location added.');
   } catch (err) {
     res.redirect('/admin/locations?error=' + encodeURIComponent(err.message));
@@ -631,9 +633,9 @@ router.post('/locations/add', requireAdmin, (req, res) => {
 });
 
 router.post('/locations/:id/edit', requireAdmin, (req, res) => {
-  const { name, slots_per_day } = req.body;
-  db.run('UPDATE locations SET name = ?, slots_per_day = ? WHERE id = ?',
-    [name.trim(), parseInt(slots_per_day) || 1, req.params.id]);
+  const { name, slots_per_day, campus } = req.body;
+  db.run('UPDATE locations SET name = ?, slots_per_day = ?, campus = ? WHERE id = ?',
+    [name.trim(), parseInt(slots_per_day) || 1, normalizeCampus(campus), req.params.id]);
   res.redirect('/admin/locations?success=Location updated.');
 });
 

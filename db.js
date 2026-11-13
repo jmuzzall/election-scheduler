@@ -172,6 +172,10 @@ async function initialize() {
   try { db.run('ALTER TABLE system_settings ADD COLUMN lookback_window INTEGER DEFAULT 0'); } catch(e) {}
   try { db.run('ALTER TABLE system_settings ADD COLUMN lookback_type TEXT DEFAULT \'periods\''); } catch(e) {}
 
+  // Migrations: campus for deacons and locations (existing rows default to McLean)
+  try { db.run("ALTER TABLE candidates ADD COLUMN campus TEXT DEFAULT 'McLean'"); } catch(e) {}
+  try { db.run("ALTER TABLE locations ADD COLUMN campus TEXT DEFAULT 'McLean'"); } catch(e) {}
+
   // Migrations: draft schedule settings
   try { db.run("ALTER TABLE system_settings ADD COLUMN draft_start_date TEXT"); } catch(e) {}
   try { db.run("ALTER TABLE system_settings ADD COLUMN draft_end_date TEXT"); } catch(e) {}
